@@ -14,13 +14,13 @@ class PayrollExcelController
     public function __invoke(Request $request, PayrollExcelExporter $exporter): StreamedResponse
     {
         $user = $request->user();
-        abort_unless(in_array($user->role, ['admin_pusat', 'keuangan'], true), 403);
+        abort_unless(in_array($user->role, ['keuangan_pusat', 'keuangan'], true), 403);
 
         $validated = $request->validate([
             'period' => ['required', 'date_format:Y-m'],
             'branch_id' => ['nullable', 'uuid', 'exists:branches,id'],
         ]);
-        $branchId = $user->role === 'admin_pusat'
+        $branchId = $user->role === 'keuangan_pusat'
             ? ($validated['branch_id'] ?? null)
             : ($user->branch_id ?: null);
 

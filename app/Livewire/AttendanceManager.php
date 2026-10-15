@@ -76,6 +76,7 @@ class AttendanceManager extends Component
 
     public function saveAttendance(): void
     {
+        abort_unless(auth()->user()->role === 'admin_cabang', 403);
         $user = auth()->user();
         $branchId = $user->role === 'admin_pusat' ? $this->branchId : $user->branch_id;
         $validated = $this->validate([
@@ -159,7 +160,7 @@ class AttendanceManager extends Component
                 ->where('branch_id', $branchId)
                 ->where('absent_employee_id', $teacher->id)
                 ->whereDate('date', $validated['date'])
-                ->update(['is_cancelled' => true]);
+                ->each(fn (TeacherSubstitution $substitution) => $substitution->update(['is_cancelled' => true]));
 
             if ($validated['status'] === 'HADIR') {
                 return;
@@ -260,7 +261,7 @@ class AttendanceManager extends Component
     {
         $user = auth()->user();
         $branchId = $user->role === 'admin_pusat' ? $this->branchId : $user->branch_id;
-        $branches = $user->role === 'admin_pusat' ? Branch::query()->orderBy('name')->get() : collect();
+        $branches = $user->role === 'admin_pusat' ? Branch::query()->whereIn('level', ['TK', 'SD', 'SMP', 'SMA'])->orderBy('name')->get() : collect();
         $teachers = $branchId
             ? Employee::query()->where('branch_id', $branchId)->where('type', 'GURU')->orderBy('name')->get(['id', 'name', 'nip'])
             : collect();
@@ -276,19 +277,27 @@ class AttendanceManager extends Component
         }
 
         $recentAttendances = Attendance::query()
-            ->with('employee:id,name,nip')
+            ->with('employee:id,name,nip,branch_id', 'employee.branch:id,name')
             ->when($branchId, fn ($query) => $query->where('branch_id', $branchId))
             ->whereDate('date', $this->date)
             ->orderBy('status')
             ->orderBy('employee_id')
             ->paginate($this->perPage);
+        $substitutionsByEmployee = TeacherSubstitution::query()
+            ->with(['substituteEmployee:id,name', 'rosterSlot:id,subject,class_name,period'])
+            ->whereDate('date', $this->date)
+            ->where('is_cancelled', false)
+            ->when($branchId, fn ($query) => $query->where('branch_id', $branchId))
+            ->get()
+            ->groupBy('absent_employee_id');
 
         return view('livewire.attendance-manager', compact(
             'branches',
             'teachers',
             'slots',
             'substitutesBySlot',
-            'recentAttendances'
+            'recentAttendances',
+            'substitutionsByEmployee'
         ))->layout('layouts.app', ['title' => 'Absensi dan Guru Pengganti']);
     }
 }

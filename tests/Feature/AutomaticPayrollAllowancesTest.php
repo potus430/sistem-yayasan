@@ -2,13 +2,15 @@
 
 namespace Tests\Feature;
 
-use App\Livewire\PayrollManager;
 use App\Livewire\IncentiveSettings;
+use App\Livewire\PayrollManager;
 use App\Models\AcademicYear;
 use App\Models\Branch;
 use App\Models\BranchIncentive;
 use App\Models\Employee;
+use App\Models\RosterSlot;
 use App\Models\Salary;
+use App\Models\TeacherHourlyRate;
 use App\Models\TeacherSubstitution;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -30,11 +32,27 @@ class AutomaticPayrollAllowancesTest extends TestCase
             'substitution_allowance_per_period' => 15000,
         ]);
         $user = User::query()->create([
-            'name' => 'Finance Test',
+            'name' => 'Branch Finance Test',
             'email' => Str::uuid().'@example.test',
             'password' => 'test-password',
             'branch_id' => $branch->id,
             'role' => 'keuangan',
+            'is_active' => true,
+        ]);
+        $centralFinance = User::query()->create([
+            'name' => 'Central Finance Test',
+            'email' => Str::uuid().'@example.test',
+            'password' => 'test-password',
+            'branch_id' => null,
+            'role' => 'keuangan_pusat',
+            'is_active' => true,
+        ]);
+        $centralAdmin = User::query()->create([
+            'name' => 'Central Admin Test',
+            'email' => Str::uuid().'@example.test',
+            'password' => 'test-password',
+            'branch_id' => null,
+            'role' => 'admin_pusat',
             'is_active' => true,
         ]);
         $teacher = Employee::query()->create([
@@ -55,9 +73,24 @@ class AutomaticPayrollAllowancesTest extends TestCase
         ]);
         $academicYear = AcademicYear::query()->create([
             'name' => '2098/2099-'.Str::random(4),
-            'starts_on' => '2098-07-01',
-            'ends_on' => '2099-06-30',
+            'starts_on' => '2026-07-01',
+            'ends_on' => '2027-06-30',
             'is_active' => false,
+        ]);
+        TeacherHourlyRate::query()->create([
+            'branch_id' => $branch->id,
+            'academic_year_id' => $academicYear->id,
+            'amount' => 150000,
+        ]);
+        RosterSlot::query()->create([
+            'branch_id' => $branch->id,
+            'academic_year_id' => $academicYear->id,
+            'employee_id' => $teacher->id,
+            'subject' => 'Matematika',
+            'class_name' => 'X-A',
+            'room' => 'Ruang 1',
+            'weekday' => 1,
+            'period' => 1,
         ]);
         $manualIncentive = BranchIncentive::query()->create([
             'branch_id' => $branch->id,
@@ -81,6 +114,18 @@ class AutomaticPayrollAllowancesTest extends TestCase
 
         Livewire::actingAs($user)
             ->test(IncentiveSettings::class)
+            ->call('saveBranchPayrollSettings')
+            ->assertForbidden();
+
+        Livewire::actingAs($centralFinance)
+            ->test(IncentiveSettings::class)
+            ->set('branchId', $branch->id)
+            ->call('saveBranchPayrollSettings')
+            ->assertForbidden();
+
+        Livewire::actingAs($centralAdmin)
+            ->test(IncentiveSettings::class)
+            ->set('branchId', $branch->id)
             ->set('monthlyTransportAllowance', '60000')
             ->set('substitutionAllowancePerPeriod', '20000')
             ->call('saveBranchPayrollSettings')
@@ -88,6 +133,15 @@ class AutomaticPayrollAllowancesTest extends TestCase
 
         Livewire::actingAs($user)
             ->test(PayrollManager::class)
+            ->set('employeeId', $teacher->id)
+            ->set('period', '2026-10')
+            ->set('academicYearId', $academicYear->id)
+            ->call('savePayroll')
+            ->assertForbidden();
+
+        Livewire::actingAs($centralFinance)
+            ->test(PayrollManager::class)
+            ->set('branchId', $branch->id)
             ->set('employeeId', $teacher->id)
             ->set('period', '2026-10')
             ->set('academicYearId', $academicYear->id)

@@ -14,21 +14,21 @@ class DatabaseSeeder extends Seeder
     {
         $this->call(SampleDataSeeder::class);
 
-        $email = env('SEED_ADMIN_EMAIL');
-        $password = env('SEED_ADMIN_PASSWORD');
-
-        if (! $email || ! $password) {
-            return;
+        $adminEmail = env('SEED_ADMIN_EMAIL');
+        $adminPassword = env('SEED_ADMIN_PASSWORD');
+        if ($adminEmail && $adminPassword) {
+            User::query()->updateOrCreate(
+                ['email' => $adminEmail],
+                [
+                    'name' => 'Administrator Pusat',
+                    'branch_id' => null,
+                    'role' => 'admin_pusat',
+                    'password' => $adminPassword,
+                    'is_active' => true,
+                ]
+            );
         }
 
-        User::query()->updateOrCreate(
-            ['email' => $email],
-            [
-                'name' => 'Administrator Pusat',
-                'branch_id' => null,
-                'role' => 'admin_pusat',
-                'password' => $password,
-            ]
-        );
+        $this->call(CentralFinanceAccountSeeder::class);
     }
 }

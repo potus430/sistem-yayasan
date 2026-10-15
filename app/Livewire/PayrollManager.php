@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Livewire\Concerns\HasDateRangeFilter;
 use App\Models\AcademicYear;
 use App\Models\AnnualIncentiveAssignment;
 use App\Models\Attendance;
@@ -9,7 +10,9 @@ use App\Models\Branch;
 use App\Models\BranchIncentive;
 use App\Models\Employee;
 use App\Models\EmployeePositionAssignment;
+use App\Models\RosterSlot;
 use App\Models\Salary;
+use App\Models\TeacherHourlyRate;
 use App\Models\TeacherSubstitution;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -19,7 +22,7 @@ use Livewire\WithPagination;
 
 class PayrollManager extends Component
 {
-    use WithPagination;
+    use HasDateRangeFilter, WithPagination;
 
     public string $branchId = '';
 
@@ -33,16 +36,20 @@ class PayrollManager extends Component
 
     public int $perPage = 25;
 
+    public int $slipsPerPage = 2;
+
     /** @var array<string, string> */
     public array $incentiveAmounts = [];
 
     public function mount(): void
     {
         $this->period = now()->format('Y-m');
+        $this->dateFilterMode = 'month';
+        $this->dateFilterMonth = $this->period;
         $activeYearId = (string) (AcademicYear::query()->where('is_active', true)->value('id') ?? '');
         $this->academicYearId = $activeYearId;
-        if (auth()->user()->role !== 'admin_pusat') {
-            $this->branchId = auth()->user()->branch_id;
+        if (! in_array(auth()->user()->role, ['admin_pusat', 'keuangan_pusat'], true)) {
+            $this->branchId = (string) auth()->user()->branch_id;
         }
     }
 
@@ -62,6 +69,9 @@ class PayrollManager extends Component
 
     public function updatedPeriod(): void
     {
+        if ($this->dateFilterMode === 'month') {
+            $this->dateFilterMonth = $this->period;
+        }
         $this->loadSavedIncentiveAmounts();
         $this->loadSavedAllowances();
         $this->resetPage();
@@ -78,6 +88,7 @@ class PayrollManager extends Component
 
     public function savePayroll(): void
     {
+        abort_unless(auth()->user()->role === 'keuangan_pusat', 403);
         $user = auth()->user();
         $branchId = $this->effectiveBranchId($user);
 
@@ -120,12 +131,25 @@ class PayrollManager extends Component
             $validated['incentiveAmounts'] ?? [],
             (float) $validated['allowances']
         );
+        if ($employee->type === 'GURU' && ! $calculation['hourly_rate_configured']) {
+            $this->addError('academicYearId', 'Tarif gaji guru per jam belum ditetapkan admin pusat untuk cabang dan tahun ajaran ini.');
+
+            return;
+        }
+        if (! $calculation['academic_year_matches_period']) {
+            $this->addError('academicYearId', 'Tahun ajaran yang dipilih tidak mencakup periode payroll.');
+
+            return;
+        }
 
         DB::transaction(function () use ($branchId, $employee, $validated, $calculation): void {
             Salary::query()->updateOrCreate(
                 ['employee_id' => $employee->id, 'period' => $validated['period']],
                 [
                     'branch_id' => $branchId,
+                    'base_salary' => $calculation['base_salary'],
+                    'teaching_hours' => $calculation['teaching_hours'],
+                    'hourly_rate' => $calculation['hourly_rate'],
                     'incentives' => $calculation['total_incentives'],
                     'incentive_details' => $calculation['incentive_details'],
                     'position_salary' => $calculation['position_salary'],
@@ -154,7 +178,11 @@ class PayrollManager extends Component
      *     deductions: float,
      *     net_salary: float,
      *     substitution_count: int,
-     *     base_salary: float
+     *     base_salary: float,
+     *     teaching_hours: int,
+     *     hourly_rate: float,
+     *     hourly_rate_configured: bool,
+     *     academic_year_matches_period: bool
      * }
      */
     private function calculatePayroll(
@@ -165,6 +193,26 @@ class PayrollManager extends Component
         array $manualIncentiveAmounts,
         float $manualAllowance
     ): array {
+        $teachingHours = 0;
+        $hourlyRate = 0.0;
+        $hourlyRateConfigured = false;
+        $academicYearMatchesPeriod = true;
+        $baseSalary = (float) $employee->base_salary;
+        if ($employee->type === 'GURU' && $academicYearId) {
+            $academicYear = AcademicYear::query()->findOrFail($academicYearId);
+            $periodStart = Carbon::createFromFormat('!Y-m', $period)->startOfMonth();
+            $periodEnd = $periodStart->copy()->endOfMonth();
+            $academicYearMatchesPeriod = $periodStart->lessThanOrEqualTo($academicYear->ends_on)
+                && $periodEnd->greaterThanOrEqualTo($academicYear->starts_on);
+            $hourlyRateValue = TeacherHourlyRate::query()
+                ->where('branch_id', $branchId)
+                ->where('academic_year_id', $academicYearId)
+                ->value('amount');
+            $hourlyRateConfigured = $hourlyRateValue !== null;
+            $hourlyRate = (float) ($hourlyRateValue ?? 0);
+            $teachingHours = $this->monthlyRosterHours($branchId, $employee->id, $period, $academicYearId);
+            $baseSalary = round($teachingHours * $hourlyRate, 2);
+        }
         $definitions = BranchIncentive::query()
             ->where('branch_id', $branchId)
             ->where('is_active', true)
@@ -264,8 +312,8 @@ class PayrollManager extends Component
             ->whereIn('status', ['ALFA', 'IZIN'])
             ->whereBetween('date', [$month->copy()->startOfMonth()->toDateString(), $month->copy()->endOfMonth()->toDateString()])
             ->count();
-        $deductions = round(((float) $employee->base_salary / $month->daysInMonth) * $absentDays, 2);
-        $netSalary = max(0, round((float) $employee->base_salary + $positionSalary + $totalIncentives + $totalAllowances - $deductions, 2));
+        $deductions = round(($baseSalary / $month->daysInMonth) * $absentDays, 2);
+        $netSalary = max(0, round($baseSalary + $positionSalary + $totalIncentives + $totalAllowances - $deductions, 2));
 
         return [
             'incentive_details' => $incentiveDetails,
@@ -277,24 +325,55 @@ class PayrollManager extends Component
             'deductions' => $deductions,
             'net_salary' => $netSalary,
             'substitution_count' => $substitutionCount,
-            'base_salary' => (float) $employee->base_salary,
+            'base_salary' => $baseSalary,
+            'teaching_hours' => $teachingHours,
+            'hourly_rate' => $hourlyRate,
+            'hourly_rate_configured' => $hourlyRateConfigured,
+            'academic_year_matches_period' => $academicYearMatchesPeriod,
         ];
+    }
+
+    private function monthlyRosterHours(string $branchId, string $employeeId, string $period, string $academicYearId): int
+    {
+        $academicYear = AcademicYear::query()->findOrFail($academicYearId);
+        $monthStart = Carbon::createFromFormat('!Y-m', $period)->startOfMonth();
+        $monthEnd = $monthStart->copy()->endOfMonth();
+        $start = $monthStart->greaterThan($academicYear->starts_on) ? $monthStart : $academicYear->starts_on->copy();
+        $end = $monthEnd->lessThan($academicYear->ends_on) ? $monthEnd : $academicYear->ends_on->copy();
+        if ($start->greaterThan($end)) {
+            return 0;
+        }
+
+        $weeklyHours = RosterSlot::query()
+            ->where('branch_id', $branchId)
+            ->where('academic_year_id', $academicYearId)
+            ->where('employee_id', $employeeId)
+            ->selectRaw('weekday, COUNT(*) as hours')
+            ->groupBy('weekday')
+            ->pluck('hours', 'weekday');
+        if ($weeklyHours->isEmpty()) {
+            return 0;
+        }
+
+        $monthlyHours = 0;
+        for ($date = $start->copy(); $date->lessThanOrEqualTo($end); $date->addDay()) {
+            $monthlyHours += (int) ($weeklyHours[$date->dayOfWeekIso] ?? 0);
+        }
+
+        return $monthlyHours;
     }
 
     public function markPaid(string $salaryId): void
     {
+        abort_unless(auth()->user()->role === 'keuangan_pusat', 403);
         $query = Salary::query()->whereKey($salaryId);
-        if (auth()->user()->role !== 'admin_pusat') {
-            $query->where('branch_id', auth()->user()->branch_id);
-        }
-
         $query->firstOrFail()->update(['status' => 'PAID']);
         session()->flash('success', 'Status gaji diperbarui menjadi lunas.');
     }
 
     private function effectiveBranchId($user): ?string
     {
-        return $user->role === 'admin_pusat' ? ($this->branchId ?: null) : $user->branch_id;
+        return in_array($user->role, ['admin_pusat', 'keuangan_pusat'], true) ? ($this->branchId ?: null) : $user->branch_id;
     }
 
     private function loadSavedAllowances(): void
@@ -359,7 +438,7 @@ class PayrollManager extends Component
     {
         $user = auth()->user();
         $branchId = $this->effectiveBranchId($user);
-        $branches = $user->role === 'admin_pusat' ? Branch::query()->orderBy('name')->get() : collect();
+        $branches = in_array($user->role, ['admin_pusat', 'keuangan_pusat'], true) ? Branch::query()->orderBy('name')->get() : collect();
         $employees = $branchId
             ? Employee::query()->where('branch_id', $branchId)->orderBy('name')->get()
             : collect();
@@ -373,13 +452,16 @@ class PayrollManager extends Component
             : collect();
         $academicYears = AcademicYear::query()->orderByDesc('starts_on')->get();
 
-        $salaries = Salary::query()
+        $salaryQuery = Salary::query()
             ->with('employee:id,name,nip')
-            ->when($branchId, fn ($query) => $query->where('branch_id', $branchId))
-            ->when(! $branchId && $user->role === 'admin_pusat', fn ($query) => $query->where('period', $this->period))
-            ->where('period', $this->period)
-            ->orderByDesc('updated_at')
-            ->paginate($this->perPage);
+            ->when($branchId, fn ($query) => $query->where('branch_id', $branchId));
+        if ($this->dateFilterMode !== 'all') {
+            [$from, $to] = $this->dateFilterBounds();
+            $salaryQuery
+                ->when($from, fn ($query, string $date) => $query->where('period', '>=', substr($date, 0, 7)))
+                ->when($to, fn ($query, string $date) => $query->where('period', '<=', substr($date, 0, 7)));
+        }
+        $salaries = $salaryQuery->orderByDesc('updated_at')->paginate($this->perPage);
         $previewEmployee = $branchId && $this->employeeId
             ? Employee::query()->where('branch_id', $branchId)->find($this->employeeId)
             : null;

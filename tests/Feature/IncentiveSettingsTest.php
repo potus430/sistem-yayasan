@@ -34,6 +34,22 @@ class IncentiveSettingsTest extends TestCase
             'role' => 'keuangan',
             'is_active' => true,
         ]);
+        $centralFinance = User::query()->create([
+            'name' => 'Central Incentive Finance',
+            'email' => Str::uuid().'@example.test',
+            'password' => 'test-password',
+            'branch_id' => null,
+            'role' => 'keuangan_pusat',
+            'is_active' => true,
+        ]);
+        $centralAdmin = User::query()->create([
+            'name' => 'Central Incentive Admin',
+            'email' => Str::uuid().'@example.test',
+            'password' => 'test-password',
+            'branch_id' => null,
+            'role' => 'admin_pusat',
+            'is_active' => true,
+        ]);
         $employee = Employee::query()->create([
             'branch_id' => $branch->id,
             'nip' => Str::random(15),
@@ -53,8 +69,7 @@ class IncentiveSettingsTest extends TestCase
             ->withoutVite()
             ->get(route('payroll'))
             ->assertOk()
-            ->assertSee('Pengaturan insentif')
-            ->assertDontSee('Daftar jenis insentif cabang');
+            ->assertDontSee('Hitung payroll');
         $this->get(route('incentives'))
             ->assertOk()
             ->assertSee('Daftar jenis insentif cabang')
@@ -62,9 +77,22 @@ class IncentiveSettingsTest extends TestCase
 
         Livewire::actingAs($user)
             ->test(IncentiveSettings::class)
+            ->assertDontSee('Tambah jenis insentif')
+            ->call('addIncentiveType')
+            ->assertForbidden();
+
+        Livewire::actingAs($centralFinance)
+            ->test(IncentiveSettings::class)
+            ->set('branchId', $branch->id)
+            ->call('addIncentiveType')
+            ->assertForbidden();
+
+        Livewire::actingAs($centralAdmin)
+            ->test(IncentiveSettings::class)
+            ->set('branchId', $branch->id)
             ->set('newIncentiveName', 'Tunjangan jabatan')
             ->set('newIncentiveType', 'ANNUAL')
-            ->set('newIncentiveDefault', '0')
+            ->set('newIncentiveDefault', '50000')
             ->call('addIncentiveType')
             ->assertHasNoErrors();
 
@@ -72,17 +100,26 @@ class IncentiveSettingsTest extends TestCase
             ->where('branch_id', $branch->id)
             ->where('name', 'Tunjangan jabatan')
             ->firstOrFail();
-
+        $this->assertSame('50000.00', $incentive->default_amount);
         Livewire::actingAs($user)
             ->test(IncentiveSettings::class)
+            ->set("incentiveDefinitions.{$incentive->id}.default_amount", '100000')
+            ->call('saveIncentiveType', $incentive->id)
+            ->assertForbidden();
+        $this->assertSame('50000.00', $incentive->fresh()->default_amount);
+
+        Livewire::actingAs($centralFinance)
+            ->test(IncentiveSettings::class)
+            ->set('branchId', $branch->id)
             ->set('employeeId', $employee->id)
             ->set('academicYearId', $academicYear->id)
             ->set("annualIncentiveAmounts.{$incentive->id}", '50000')
             ->call('saveAnnualIncentives')
             ->assertHasNoErrors();
 
-        Livewire::actingAs($user)
+        Livewire::actingAs($centralFinance)
             ->test(PayrollManager::class)
+            ->set('branchId', $branch->id)
             ->set('employeeId', $employee->id)
             ->set('period', '2026-10')
             ->set('academicYearId', $academicYear->id)

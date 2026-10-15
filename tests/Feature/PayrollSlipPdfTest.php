@@ -11,8 +11,8 @@ use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use ZipArchive;
 use Tests\TestCase;
+use ZipArchive;
 
 class PayrollSlipPdfTest extends TestCase
 {
@@ -39,6 +39,14 @@ class PayrollSlipPdfTest extends TestCase
             'role' => 'keuangan',
             'is_active' => true,
         ]);
+        $centralFinance = User::query()->create([
+            'name' => 'Central Finance PDF Test',
+            'email' => Str::uuid().'@example.test',
+            'password' => 'test-password',
+            'branch_id' => null,
+            'role' => 'keuangan_pusat',
+            'is_active' => true,
+        ]);
 
         $employeeIds = [];
         foreach ([
@@ -59,6 +67,9 @@ class PayrollSlipPdfTest extends TestCase
                 'employee_id' => $employee->id,
                 'branch_id' => $branch->id,
                 'period' => '2026-10',
+                'base_salary' => 600000,
+                'teaching_hours' => $type === 'GURU' ? 80 : 0,
+                'hourly_rate' => $type === 'GURU' ? 7500 : 0,
                 'incentives' => 50000,
                 'incentive_details' => [['name' => 'Insentif uji', 'amount' => 50000, 'type' => 'MANUAL']],
                 'allowances' => 30000,
@@ -78,6 +89,18 @@ class PayrollSlipPdfTest extends TestCase
         $pdf = $response->getContent();
         $this->assertStringStartsWith('%PDF-', $pdf);
         $this->assertSame(1, preg_match_all('/\/Type\s*\/Page\b/', $pdf));
+        $fourPerPage = $this->actingAs($user)->get(route('payroll.slips.pdf', [
+            'period' => '2026-10',
+            'per_page' => 4,
+        ]));
+        $fourPerPage->assertOk();
+        $this->assertSame(1, preg_match_all('/\/Type\s*\/Page\b/', $fourPerPage->getContent()));
+        $onePerPage = $this->actingAs($user)->get(route('payroll.slips.pdf', [
+            'period' => '2026-10',
+            'per_page' => 1,
+        ]));
+        $onePerPage->assertOk();
+        $this->assertSame(2, preg_match_all('/\/Type\s*\/Page\b/', $onePerPage->getContent()));
 
         $individualResponse = $this->actingAs($user)->get(route('payroll.slips.pdf', [
             'period' => '2026-10',
@@ -90,7 +113,14 @@ class PayrollSlipPdfTest extends TestCase
         $this->assertStringStartsWith('%PDF-', $individualPdf);
         $this->assertSame(1, preg_match_all('/\/Type\s*\/Page\b/', $individualPdf));
 
-        $excelResponse = $this->actingAs($user)->get(route('payroll.export.xlsx', ['period' => '2026-10']));
+        $this->actingAs($user)
+            ->get(route('payroll.export.xlsx', ['period' => '2026-10']))
+            ->assertOk()
+            ->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        $excelResponse = $this->actingAs($centralFinance)->get(route('payroll.export.xlsx', [
+            'period' => '2026-10',
+            'branch_id' => $branch->id,
+        ]));
         $excelResponse->assertOk();
         $excelResponse->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         $this->assertStringContainsString('.xlsx', $excelResponse->headers->get('content-disposition'));

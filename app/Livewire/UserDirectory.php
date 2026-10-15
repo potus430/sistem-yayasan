@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Livewire\Concerns\HasDateRangeFilter;
 use App\Models\Branch;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
@@ -13,7 +14,7 @@ use Livewire\WithPagination;
 
 class UserDirectory extends Component
 {
-    use WithPagination;
+    use HasDateRangeFilter, WithPagination;
 
     public bool $showForm = false;
 
@@ -72,12 +73,12 @@ class UserDirectory extends Component
         $validated = $this->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($this->editingId ?: null)],
-            'role' => ['required', Rule::in(['admin_pusat', 'admin_cabang', 'keuangan', 'guru', 'staff'])],
+            'role' => ['required', Rule::in(['admin_pusat', 'keuangan_pusat', 'admin_cabang', 'keuangan', 'guru', 'staff', 'staff_pusat'])],
             'branchId' => [
-                Rule::requiredIf($this->role !== 'admin_pusat'),
+                Rule::requiredIf(! in_array($this->role, ['admin_pusat', 'keuangan_pusat', 'staff_pusat'], true)),
                 'nullable',
                 'uuid',
-                Rule::exists('branches', 'id'),
+                Rule::exists('branches', 'id')->whereIn('level', ['TK', 'SD', 'SMP', 'SMA']),
             ],
             'password' => [$user->exists ? 'nullable' : 'required', 'string', 'min:12', 'max:255'],
             'isActive' => ['boolean'],
@@ -100,7 +101,7 @@ class UserDirectory extends Component
             'name' => trim($validated['name']),
             'email' => Str::lower(trim($validated['email'])),
             'role' => $validated['role'],
-            'branch_id' => $validated['role'] === 'admin_pusat' ? null : $validated['branchId'],
+            'branch_id' => in_array($validated['role'], ['admin_pusat', 'keuangan_pusat', 'staff_pusat'], true) ? null : $validated['branchId'],
             'is_active' => $validated['isActive'],
         ];
         if ($validated['password'] ?? null) {
@@ -162,10 +163,11 @@ class UserDirectory extends Component
             ->when(trim($this->search) !== '', fn (Builder $query) => $query->where(fn (Builder $searchQuery) => $searchQuery
                 ->where('name', 'like', $term)
                 ->orWhere('email', 'like', $term)))
+            ->tap(fn (Builder $query) => $this->applyDateFilter($query, 'created_at'))
             ->orderBy('role')
             ->orderBy('name')
             ->paginate(25);
-        $branches = Branch::query()->orderBy('name')->get(['id', 'name']);
+        $branches = Branch::query()->whereIn('level', ['TK', 'SD', 'SMP', 'SMA'])->orderBy('name')->get(['id', 'name']);
 
         return view('livewire.user-directory', compact('users', 'branches'))
             ->layout('layouts.app', ['title' => 'Manajemen akun']);

@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Livewire\Concerns\HasDateRangeFilter;
 use App\Models\Branch;
 use App\Models\SchoolClass;
 use App\Models\Student;
@@ -13,7 +14,7 @@ use Livewire\WithPagination;
 
 class StudentDirectory extends Component
 {
-    use WithPagination;
+    use HasDateRangeFilter, WithPagination;
 
     public string $branchId = '';
 
@@ -37,7 +38,8 @@ class StudentDirectory extends Component
 
     public function mount(): void
     {
-        if (auth()->user()->role !== 'admin_pusat') {
+        $this->authorizeViewing();
+        if (auth()->user()->role === 'admin_cabang') {
             $this->branchId = (string) auth()->user()->branch_id;
         }
     }
@@ -151,6 +153,11 @@ class StudentDirectory extends Component
 
     private function authorizeManagement(): void
     {
+        abort_unless(auth()->user()->role === 'admin_cabang', 403);
+    }
+
+    private function authorizeViewing(): void
+    {
         abort_unless(in_array(auth()->user()->role, ['admin_pusat', 'admin_cabang'], true), 403);
     }
 
@@ -162,11 +169,13 @@ class StudentDirectory extends Component
 
     public function render()
     {
+        $this->authorizeViewing();
         $user = auth()->user();
         $branchId = $user->role === 'admin_pusat' ? ($this->branchId ?: null) : $user->branch_id;
         $query = Student::query()
             ->with('branch:id,name,level')
             ->when($branchId, fn (Builder $query) => $query->where('branch_id', $branchId))
+            ->tap(fn (Builder $query) => $this->applyDateFilter($query, 'created_at'))
             ->when($this->className !== '', fn (Builder $query) => $query->where('current_class', $this->className))
             ->when(trim($this->search) !== '', function (Builder $query): void {
                 $term = '%'.trim($this->search).'%';
@@ -183,7 +192,9 @@ class StudentDirectory extends Component
             ? SchoolClass::query()->where('branch_id', $this->formBranchId)->orderBy('name')->pluck('name')
             : collect();
         $students = $query->orderBy('branch_id')->orderBy('current_class')->orderBy('name')->paginate($this->perPage);
-        $branches = $user->role === 'admin_pusat' ? Branch::query()->orderBy('name')->get(['id', 'name', 'level']) : collect();
+        $branches = $user->role === 'admin_pusat'
+            ? Branch::query()->whereIn('level', ['TK', 'SD', 'SMP', 'SMA'])->orderBy('name')->get(['id', 'name', 'level'])
+            : collect();
 
         return view('livewire.student-directory', compact('branches', 'classes', 'formClasses', 'students', 'totalStudents'))
             ->layout('layouts.app', ['title' => 'Data siswa']);

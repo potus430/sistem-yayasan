@@ -5,6 +5,7 @@ use App\Http\Controllers\PayrollExcelController;
 use App\Http\Controllers\ReportDownloadController;
 use App\Livewire\AccountProfile;
 use App\Livewire\AttendanceManager;
+use App\Livewire\AuditLogViewer;
 use App\Livewire\Auth\Login;
 use App\Livewire\BranchDirectory;
 use App\Livewire\Dashboard;
@@ -31,16 +32,25 @@ Route::post('/logout', function () {
     return redirect()->route('login');
 })->middleware('auth')->name('logout');
 
-Route::middleware(['auth', 'role:admin_pusat,admin_cabang,keuangan,guru,staff'])->group(function (): void {
+Route::middleware(['auth', 'role:admin_pusat,keuangan_pusat,admin_cabang,keuangan,guru,staff'])->group(function (): void {
     Route::get('/', Dashboard::class)->name('dashboard');
     Route::get('/roster', RosterGenerator::class)->name('roster');
-    Route::get('/profile', AccountProfile::class)->name('profile');
+});
+
+Route::middleware(['auth', 'role:admin_pusat,keuangan_pusat,admin_cabang,keuangan,guru,staff,staff_pusat'])->get('/profile', AccountProfile::class)->name('profile');
+
+Route::middleware(['auth', 'role:admin_pusat,keuangan_pusat,admin_cabang'])->group(function (): void {
+    Route::get('/employees', EmployeeDirectory::class)->name('employees');
 });
 
 Route::middleware(['auth', 'role:admin_pusat,admin_cabang'])->group(function (): void {
-    Route::get('/employees', EmployeeDirectory::class)->name('employees');
-    Route::get('/students', StudentDirectory::class)->name('students');
     Route::get('/school-structure', SchoolStructureManager::class)->name('school-structure');
+});
+
+Route::middleware(['auth', 'role:admin_pusat,admin_cabang'])->get('/students', StudentDirectory::class)->name('students');
+
+Route::middleware(['auth', 'role:admin_pusat'])->group(function (): void {
+    Route::get('/activity-logs', AuditLogViewer::class)->name('activity-logs');
 });
 
 Route::middleware(['auth', 'role:admin_pusat'])->group(function (): void {
@@ -53,7 +63,7 @@ Route::middleware(['auth', 'role:admin_pusat,admin_cabang'])->group(function ():
     Route::get('/attendance', AttendanceManager::class)->name('attendance');
 });
 
-Route::middleware(['auth', 'role:admin_pusat,keuangan'])->group(function (): void {
+Route::middleware(['auth', 'role:admin_pusat,keuangan_pusat,keuangan'])->group(function (): void {
     Route::get('/payroll', PayrollManager::class)->name('payroll');
     Route::get('/incentives', IncentiveSettings::class)->name('incentives');
     Route::get('/payroll/export.xlsx', PayrollExcelController::class)->name('payroll.export.xlsx');
@@ -61,12 +71,12 @@ Route::middleware(['auth', 'role:admin_pusat,keuangan'])->group(function (): voi
     Route::get('/spp', SppDashboard::class)->name('spp');
 });
 
-Route::middleware(['auth', 'role:admin_pusat,admin_cabang,keuangan'])
+Route::middleware(['auth', 'role:admin_pusat,keuangan_pusat,admin_cabang,keuangan'])
     ->group(function (): void {
         Route::get('/reports', ReportsDashboard::class)->name('reports');
         Route::get('/reports/{report}', ReportDownloadController::class)->name('reports.download');
     });
 
-Route::middleware(['auth', 'role:admin_pusat,admin_cabang,keuangan'])
+Route::middleware(['auth', 'role:admin_pusat,keuangan_pusat,admin_cabang,keuangan'])
     ->get('/position-compensation', PositionCompensationManager::class)
     ->name('position-compensation');

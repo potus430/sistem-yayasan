@@ -22,7 +22,7 @@ class ReportsDashboard extends Component
     public function mount(): void
     {
         $user = auth()->user();
-        $this->branchId = $user->role === 'admin_pusat' ? '' : (string) $user->branch_id;
+        $this->branchId = in_array($user->role, ['admin_pusat', 'keuangan_pusat'], true) ? '' : (string) $user->branch_id;
         $this->period = now()->format('Y-m');
         $this->academicYearId = (string) (AcademicYear::query()->where('is_active', true)->value('id') ?? '');
     }
@@ -37,9 +37,9 @@ class ReportsDashboard extends Component
     public function render()
     {
         $user = auth()->user();
-        $isCentralAdmin = $user->role === 'admin_pusat';
-        $canViewSchool = in_array($user->role, ['admin_pusat', 'admin_cabang'], true);
-        $canViewFinance = in_array($user->role, ['admin_pusat', 'keuangan'], true);
+        $isCentralAdmin = in_array($user->role, ['admin_pusat', 'keuangan_pusat'], true);
+        $canViewSchool = in_array($user->role, ['admin_pusat', 'keuangan_pusat', 'admin_cabang'], true);
+        $canViewFinance = in_array($user->role, ['admin_pusat', 'keuangan_pusat', 'keuangan'], true);
         $branchId = $isCentralAdmin
             ? (Branch::query()->whereKey($this->branchId)->value('id') ?: null)
             : $user->branch_id;

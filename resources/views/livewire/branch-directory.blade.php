@@ -9,12 +9,13 @@
         </div>
     </div>
 
+    <div class="rounded-2xl bg-white p-4 shadow-sm">@include('livewire.partials.date-range-filter')</div>
     <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         @forelse($branches as $branch)
             <article wire:key="branch-{{ $branch->id }}" class="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
                 <div class="flex items-start justify-between gap-3 bg-gradient-to-r from-slate-50 to-indigo-50/70 p-5">
-                    <div class="flex items-center gap-3"><span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600 text-sm font-black text-white shadow-md shadow-indigo-200">{{ $branch->level }}</span><div><h2 class="font-bold text-slate-900">{{ $branch->name }}</h2><p class="mt-0.5 text-xs text-slate-500">Cabang yayasan</p></div></div>
-                    <button type="button" wire:click="edit('{{ $branch->id }}')" class="rounded-lg px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100">Edit profil</button>
+                    <div class="flex items-center gap-3"><span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600 text-sm font-black text-white shadow-md shadow-indigo-200">{{ $branch->level === 'YAYASAN' ? 'HQ' : $branch->level }}</span><div><h2 class="font-bold text-slate-900">{{ $branch->name }}</h2><p class="mt-0.5 text-xs text-slate-500">{{ $branch->level === 'YAYASAN' ? 'Unit payroll kantor pusat' : 'Cabang yayasan' }}</p></div></div>
+                    @if($branch->level !== 'YAYASAN')<button type="button" wire:click="edit('{{ $branch->id }}')" class="rounded-lg px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100">Edit profil</button>@endif
                 </div>
                 <div class="space-y-4 p-5">
                     <div class="flex gap-3"><span class="mt-0.5 text-slate-400"><svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2"/></svg></span><p class="text-sm leading-5 text-slate-600">{{ $branch->address ?: 'Alamat belum diisi' }}</p></div>

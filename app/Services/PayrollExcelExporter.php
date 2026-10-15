@@ -52,7 +52,7 @@ class PayrollExcelExporter
     {
         $headers = [
             'Cabang', 'Periode', 'NIP', 'Nama Pegawai', 'Jenis',
-            'Gaji Pokok', 'Tambahan Gaji Jabatan', 'Rincian Jabatan',
+            'Gaji Pokok', 'Jam Mengajar', 'Tarif per Jam', 'Tambahan Gaji Jabatan', 'Rincian Jabatan',
             'Total Insentif', 'Rincian Insentif', 'Total Tunjangan',
             'Rincian Tunjangan', 'Potongan', 'Gaji Bersih', 'Status',
         ];
@@ -98,7 +98,9 @@ class PayrollExcelExporter
                 $employee?->nip ?? '',
                 $employee?->name ?? 'Pegawai terhapus',
                 $employee?->type === 'GURU' ? 'Guru' : ($employee?->type === 'STAFF' ? 'Staff' : ''),
-                (float) ($employee?->base_salary ?? 0),
+                (float) $salary->base_salary,
+                (int) $salary->teaching_hours,
+                (float) $salary->hourly_rate,
                 (float) $salary->position_salary,
                 $positionBreakdown,
                 (float) $salary->incentives,
@@ -108,7 +110,7 @@ class PayrollExcelExporter
                 (float) $salary->deductions,
                 (float) $salary->net_salary,
                 $salary->status === 'PAID' ? 'Dibayar' : 'Pending',
-            ], false, [6, 7, 9, 11, 13, 14]);
+            ], false, [6, 8, 9, 11, 13, 15, 16]);
         }
 
         $lastRow = max(4, $rowNumber - 1);
@@ -118,14 +120,17 @@ class PayrollExcelExporter
             ['min' => 3, 'max' => 3, 'width' => 20],
             ['min' => 4, 'max' => 4, 'width' => 28],
             ['min' => 5, 'max' => 5, 'width' => 12],
-            ['min' => 6, 'max' => 7, 'width' => 18],
-            ['min' => 8, 'max' => 8, 'width' => 60],
-            ['min' => 9, 'max' => 9, 'width' => 17],
-            ['min' => 10, 'max' => 10, 'width' => 45],
+            ['min' => 6, 'max' => 6, 'width' => 18],
+            ['min' => 7, 'max' => 7, 'width' => 14],
+            ['min' => 8, 'max' => 8, 'width' => 18],
+            ['min' => 9, 'max' => 9, 'width' => 18],
+            ['min' => 10, 'max' => 10, 'width' => 60],
             ['min' => 11, 'max' => 11, 'width' => 17],
-            ['min' => 12, 'max' => 12, 'width' => 55],
-            ['min' => 13, 'max' => 14, 'width' => 17],
-            ['min' => 15, 'max' => 15, 'width' => 14],
+            ['min' => 12, 'max' => 12, 'width' => 45],
+            ['min' => 13, 'max' => 13, 'width' => 17],
+            ['min' => 14, 'max' => 14, 'width' => 55],
+            ['min' => 15, 'max' => 16, 'width' => 17],
+            ['min' => 17, 'max' => 17, 'width' => 14],
         ];
         $columnXml = implode('', array_map(
             fn (array $column): string => '<col min="'.$column['min'].'" max="'.$column['max'].'" width="'.$column['width'].'" customWidth="1"/>',
@@ -136,7 +141,7 @@ class PayrollExcelExporter
             .'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
             .'<sheetViews><sheetView workbookViewId="0"><pane ySplit="3" topLeftCell="A4" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>'
             .'<cols>'.$columnXml.'</cols><sheetData>'.implode('', $rows).'</sheetData>'
-            .'<autoFilter ref="A1:O'.$lastRow.'"/>'
+            .'<autoFilter ref="A1:Q'.$lastRow.'"/>'
             .'</worksheet>';
     }
 

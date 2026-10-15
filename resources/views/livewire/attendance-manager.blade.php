@@ -1,24 +1,24 @@
 <section class="space-y-6">
     <div>
         <h1 class="text-2xl font-bold text-slate-900">Absensi dan Guru Pengganti</h1>
-        <p class="mt-1 text-sm text-slate-500">Tandai status guru dan pilih pengganti yang tidak memiliki jadwal atau penugasan lain pada jam tersebut.</p>
+        <p class="mt-1 text-sm text-slate-500">{{ auth()->user()->role === 'admin_pusat' ? 'Lihat catatan absensi dan penugasan guru pengganti lintas cabang.' : 'Tandai status guru dan pilih pengganti yang tidak memiliki jadwal atau penugasan lain pada jam tersebut.' }}</p>
     </div>
 
     @if(session('success'))
         <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{{ session('success') }}</div>
     @endif
 
+    @if(auth()->user()->role === 'admin_pusat')
+        <label class="block max-w-sm rounded-xl bg-white p-5 text-sm font-medium shadow-sm">Cabang sekolah
+            <select wire:model.live="branchId" class="mt-1 w-full rounded-lg border-slate-300">
+                <option value="">Semua cabang</option>
+                @foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach
+            </select>
+        </label>
+    @endif
+    @if(auth()->user()->role === 'admin_cabang')
     <form wire:submit="saveAttendance" class="space-y-5 rounded-xl bg-white p-6 shadow-sm">
         <div class="grid gap-4 md:grid-cols-2">
-            @if(auth()->user()->role === 'admin_pusat')
-                <label class="text-sm font-medium">Cabang
-                    <select wire:model.live="branchId" required class="mt-1 w-full rounded-lg border-slate-300">
-                        <option value="">Pilih cabang</option>
-                        @foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach
-                    </select>
-                </label>
-                @error('branchId')<p class="text-sm text-red-600">{{ $message }}</p>@enderror
-            @endif
             <label class="text-sm font-medium">Tanggal
                 <input type="date" wire:model.live="date" required class="mt-1 w-full rounded-lg border-slate-300">
             </label>
@@ -72,10 +72,11 @@
 
         <button type="submit" wire:loading.attr="disabled" class="rounded-lg bg-indigo-600 px-5 py-2.5 font-semibold text-white hover:bg-indigo-700 disabled:opacity-60">Simpan absensi</button>
     </form>
+    @endif
 
     <div class="overflow-hidden rounded-xl bg-white shadow-sm">
         <div class="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <div><h2 class="font-semibold">Absensi tercatat · {{ $date }}</h2><p class="mt-1 text-sm text-slate-500">{{ number_format($recentAttendances->total()) }} catatan absensi</p><a href="{{ route('reports.download', ['report' => 'attendance', 'branch_id' => auth()->user()->role === 'admin_pusat' ? $branchId : null, 'from' => $date, 'to' => $date]) }}" class="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-indigo-700 hover:underline">Ekspor laporan CSV</a></div>
+            <div><h2 class="font-semibold">Absensi tercatat · {{ $date }}</h2><p class="mt-1 text-sm text-slate-500">{{ number_format($recentAttendances->total()) }} catatan absensi</p><div class="mt-2 flex gap-3"><a href="{{ route('reports.download', ['report' => 'attendance', 'branch_id' => $branchId ?: null, 'from' => $date, 'to' => $date, 'format' => 'pdf']) }}" class="text-xs font-semibold text-rose-700 hover:underline">Ekspor PDF</a><a href="{{ route('reports.download', ['report' => 'attendance', 'branch_id' => $branchId ?: null, 'from' => $date, 'to' => $date, 'format' => 'xlsx']) }}" class="text-xs font-semibold text-emerald-700 hover:underline">Ekspor Excel</a></div></div>
             <label class="flex items-center gap-2 text-sm font-medium text-slate-600">Baris per halaman
                 <select wire:model.live="perPage" aria-label="Jumlah absensi per halaman" class="rounded-lg border-slate-200 py-2 text-sm">
                     <option value="10">10</option><option value="25">25</option><option value="50">50</option><option value="100">100</option>
@@ -84,13 +85,18 @@
         </div>
         <div class="overflow-x-auto">
             <table class="min-w-full text-left text-sm">
-                <thead class="bg-slate-50 text-xs uppercase text-slate-500"><tr><th class="px-4 py-3">Guru</th><th class="px-4 py-3">Status</th><th class="px-4 py-3">Potongan</th></tr></thead>
+                <thead class="bg-slate-50 text-xs uppercase text-slate-500"><tr>@if(auth()->user()->role === 'admin_pusat')<th class="px-4 py-3">Cabang</th>@endif<th class="px-4 py-3">Guru</th><th class="px-4 py-3">Status</th><th class="px-4 py-3">Potongan / Detail pengganti</th></tr></thead>
                 <tbody class="divide-y divide-slate-100">
                     @forelse($recentAttendances as $attendance)
                         <tr>
+                            @if(auth()->user()->role === 'admin_pusat')<td class="px-4 py-3">{{ $attendance->employee?->branch?->name ?? '—' }}</td>@endif
                             <td class="px-4 py-3 font-medium">{{ $attendance->employee?->name ?? 'Guru terhapus' }}</td>
                             <td class="px-4 py-3">{{ ['HADIR' => 'Hadir', 'IZIN' => 'Izin', 'ALFA' => 'Alfa', 'SAKIT' => 'Sakit'][$attendance->status] ?? $attendance->status }}</td>
-                            <td class="px-4 py-3">{{ $attendance->status === 'SAKIT' || $attendance->status === 'HADIR' ? 'Tidak ada' : 'Satu hari gaji pokok' }}</td>
+                            <td class="px-4 py-3">{{ $attendance->status === 'SAKIT' || $attendance->status === 'HADIR' ? 'Tidak ada' : 'Satu hari gaji pokok' }}
+                                @foreach($substitutionsByEmployee->get($attendance->employee_id, collect()) as $substitution)
+                                    <span class="block text-xs text-slate-500">Jam {{ $substitution->period }} · {{ $substitution->rosterSlot?->subject }} · {{ $substitution->substituteEmployee?->name }}</span>
+                                @endforeach
+                            </td>
                         </tr>
                     @empty
                         <tr><td colspan="3" class="px-4 py-8 text-center text-slate-500">Belum ada absensi untuk filter ini.</td></tr>

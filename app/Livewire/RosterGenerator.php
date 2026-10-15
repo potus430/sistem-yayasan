@@ -39,7 +39,13 @@ class RosterGenerator extends Component
         }
 
         $this->academicYearId = (string) (AcademicYear::query()->where('is_active', true)->value('id') ?? '');
-        $this->addLesson();
+        $this->lessons[] = [
+            'subject' => '',
+            'teacher_id' => '',
+            'class_name' => '',
+            'room' => '',
+            'weekly_hours' => 1,
+        ];
     }
 
     public function updatedBranchId(): void
@@ -63,6 +69,7 @@ class RosterGenerator extends Component
 
     public function addLesson(): void
     {
+        $this->ensureRosterAdmin();
         $this->lessons[] = [
             'subject' => '',
             'teacher_id' => '',
@@ -74,6 +81,7 @@ class RosterGenerator extends Component
 
     public function removeLesson(int $index): void
     {
+        $this->ensureRosterAdmin();
         unset($this->lessons[$index]);
         $this->lessons = array_values($this->lessons);
     }
@@ -289,14 +297,14 @@ class RosterGenerator extends Component
 
     private function ensureRosterAdmin(): void
     {
-        abort_unless(in_array(auth()->user()->role, ['admin_pusat', 'admin_cabang'], true), 403);
+        abort_unless(auth()->user()->role === 'admin_cabang', 403);
     }
 
     public function render()
     {
         $user = auth()->user();
         $branchId = $user->role === 'admin_pusat' ? $this->branchId : $user->branch_id;
-        $branches = $user->role === 'admin_pusat' ? Branch::query()->orderBy('name')->get() : collect();
+        $branches = $user->role === 'admin_pusat' ? Branch::query()->whereIn('level', ['TK', 'SD', 'SMP', 'SMA'])->orderBy('name')->get() : collect();
         $employees = $branchId
             ? Employee::query()->where('branch_id', $branchId)->where('type', 'GURU')->orderBy('name')->get(['id', 'name', 'nip'])
             : collect();
@@ -326,7 +334,7 @@ class RosterGenerator extends Component
                 ->orderBy('class_name')
                 ->get()
             : collect();
-        $isRosterAdmin = in_array($user->role, ['admin_pusat', 'admin_cabang'], true);
+        $isRosterAdmin = $user->role === 'admin_cabang';
 
         return view('livewire.roster-generator', compact('branches', 'employees', 'classes', 'rooms', 'subjects', 'academicYears', 'rosterSlots', 'swapSlots', 'rosterCount', 'isRosterAdmin'))
             ->layout('layouts.app', ['title' => 'Generator Roster']);

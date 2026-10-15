@@ -44,7 +44,7 @@ class Login extends Component
         RateLimiter::clear($rateLimitKey);
         request()->session()->regenerate();
 
-        return $this->redirectRoute('dashboard', navigate: true);
+        return $this->redirectRoute(Auth::user()->role === 'staff_pusat' ? 'profile' : 'dashboard', navigate: true);
     }
 
     public function render()

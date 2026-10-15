@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Livewire\Concerns\HasDateRangeFilter;
 use App\Models\Branch;
 use App\Models\Employee;
 use Illuminate\Database\Eloquent\Builder;
@@ -12,7 +13,7 @@ use Livewire\WithPagination;
 
 class EmployeeDirectory extends Component
 {
-    use WithPagination;
+    use HasDateRangeFilter, WithPagination;
 
     public string $branchId = '';
 
@@ -40,17 +41,26 @@ class EmployeeDirectory extends Component
 
     public string $formStatus = 'TETAP';
 
+    /** @var array<string, string> */
+    public array $salaryAmounts = [];
+
     public function mount(): void
     {
-        if (auth()->user()->role !== 'admin_pusat') {
+        if (! in_array(auth()->user()->role, ['admin_pusat', 'keuangan_pusat'], true)) {
             $this->branchId = (string) auth()->user()->branch_id;
         }
+
+        $this->loadSalaryAmounts();
     }
 
     public function updated($property): void
     {
         if (in_array($property, ['branchId', 'search', 'type', 'status'], true)) {
             $this->resetPage();
+        }
+
+        if ($property === 'branchId') {
+            $this->loadSalaryAmounts();
         }
     }
 
@@ -69,6 +79,9 @@ class EmployeeDirectory extends Component
         $this->resetForm();
         $user = auth()->user();
         $this->formBranchId = $user->role === 'admin_pusat' ? $this->branchId : $user->branch_id;
+        if ($user->role === 'admin_pusat') {
+            $this->formType = 'STAFF';
+        }
         $this->showForm = true;
     }
 
@@ -76,6 +89,7 @@ class EmployeeDirectory extends Component
     {
         $this->authorizeManagement();
         $employee = $this->scopedEmployees()->findOrFail($employeeId);
+        abort_if(auth()->user()->role === 'admin_pusat' && $employee->type !== 'STAFF', 403, 'Admin pusat hanya dapat mengelola profil staff; data guru dikelola admin cabang.');
         $this->editingId = $employee->id;
         $this->formBranchId = $employee->branch_id;
         $this->formNip = $employee->nip;
@@ -101,12 +115,16 @@ class EmployeeDirectory extends Component
                 Rule::unique('employees', 'nip')->where('branch_id', $branchId)->ignore($this->editingId ?: null),
             ],
             'formName' => ['required', 'string', 'max:255'],
-            'formType' => ['required', Rule::in(['GURU', 'STAFF'])],
-            'formBaseSalary' => ['required', 'numeric', 'min:0', 'max:999999999999.99'],
+            'formType' => ['required', Rule::in($user->role === 'admin_pusat' ? ['STAFF'] : ['GURU', 'STAFF'])],
+            'formBaseSalary' => ['nullable', 'numeric', 'min:0', 'max:999999999999.99'],
             'formStatus' => ['required', Rule::in(['TETAP', 'HONORER'])],
         ]);
 
         $employee = $this->editingId ? $this->scopedEmployees()->findOrFail($this->editingId) : new Employee;
+        if ($employee->exists && $user->role === 'admin_pusat' && $employee->type !== 'STAFF') {
+            abort(403, 'Admin pusat hanya dapat mengelola profil staff; data guru dikelola admin cabang.');
+        }
+
         if ($employee->exists && $employee->type !== $validated['formType'] && $this->employeeHasHistory($employee)) {
             $this->addError('formType', 'Jenis pegawai tidak dapat diubah karena pegawai sudah memiliki data absensi, payroll, roster, atau insentif.');
 
@@ -118,17 +136,21 @@ class EmployeeDirectory extends Component
             return;
         }
 
-        $employee->fill([
+        $attributes = [
             'branch_id' => $branchId,
             'nip' => trim($validated['formNip']),
             'name' => trim($validated['formName']),
-            'type' => $validated['formType'],
-            'base_salary' => $validated['formBaseSalary'],
+            'type' => $user->role === 'admin_pusat' ? 'STAFF' : $validated['formType'],
             'status' => $validated['formStatus'],
-        ])->save();
+        ];
+        if (! $employee->exists) {
+            $attributes['base_salary'] = 0;
+        }
+        $employee->fill($attributes)->save();
 
         $this->showForm = false;
         $this->resetForm();
+        $this->loadSalaryAmounts();
         session()->flash('success', 'Data pegawai berhasil disimpan.');
     }
 
@@ -136,6 +158,7 @@ class EmployeeDirectory extends Component
     {
         $this->authorizeManagement();
         $employee = $this->scopedEmployees()->findOrFail($employeeId);
+        abort_if(auth()->user()->role === 'admin_pusat' && $employee->type !== 'STAFF', 403, 'Data guru dikelola admin cabang.');
 
         if ($this->employeeHasHistory($employee)) {
             session()->flash('error', 'Pegawai tidak dapat dihapus karena masih memiliki riwayat absensi, payroll, roster, insentif, atau penugasan pengganti.');
@@ -152,7 +175,7 @@ class EmployeeDirectory extends Component
         $user = auth()->user();
 
         return Employee::query()->when(
-            $user->role !== 'admin_pusat',
+            ! in_array($user->role, ['admin_pusat', 'keuangan_pusat'], true),
             fn (Builder $query) => $query->where('branch_id', $user->branch_id)
         );
     }
@@ -166,6 +189,20 @@ class EmployeeDirectory extends Component
             || DB::table('teacher_substitutions')->where(fn ($query) => $query
                 ->where('absent_employee_id', $employee->id)
                 ->orWhere('substitute_employee_id', $employee->id))->exists();
+    }
+
+    public function saveBaseSalary(string $employeeId): void
+    {
+        abort_unless(auth()->user()->role === 'keuangan_pusat', 403);
+        $employee = Employee::query()->findOrFail($employeeId);
+        abort_if($employee->type !== 'STAFF', 403, 'Gaji pokok guru dihitung dari tarif per jam dan roster mengajar.');
+        $validated = $this->validate([
+            "salaryAmounts.{$employeeId}" => ['required', 'numeric', 'min:0', 'max:999999999999.99'],
+        ]);
+
+        $employee->update(['base_salary' => $validated['salaryAmounts'][$employeeId]]);
+        $this->salaryAmounts[$employeeId] = (string) $employee->fresh()->base_salary;
+        session()->flash('success', 'Nilai gaji pokok berhasil diperbarui.');
     }
 
     private function authorizeManagement(): void
@@ -182,13 +219,31 @@ class EmployeeDirectory extends Component
         $this->resetValidation();
     }
 
+    private function loadSalaryAmounts(): void
+    {
+        if (auth()->user()->role !== 'keuangan_pusat') {
+            $this->salaryAmounts = [];
+
+            return;
+        }
+
+        $branchId = $this->branchId ?: null;
+        $this->salaryAmounts = Employee::query()
+            ->where('type', 'STAFF')
+            ->when($branchId, fn (Builder $query) => $query->where('branch_id', $branchId))
+            ->pluck('base_salary', 'id')
+            ->map(fn ($amount): string => (string) $amount)
+            ->all();
+    }
+
     public function render()
     {
         $user = auth()->user();
-        $branchId = $user->role === 'admin_pusat' ? ($this->branchId ?: null) : $user->branch_id;
+        $branchId = in_array($user->role, ['admin_pusat', 'keuangan_pusat'], true) ? ($this->branchId ?: null) : $user->branch_id;
         $query = Employee::query()
             ->with('branch:id,name,level')
             ->when($branchId, fn (Builder $query) => $query->where('branch_id', $branchId))
+            ->tap(fn (Builder $query) => $this->applyDateFilter($query, 'created_at'))
             ->when($this->type !== '', fn (Builder $query) => $query->where('type', $this->type))
             ->when($this->status !== '', fn (Builder $query) => $query->where('status', $this->status))
             ->when(trim($this->search) !== '', function (Builder $query): void {
@@ -203,7 +258,7 @@ class EmployeeDirectory extends Component
         $staffCount = (clone $query)->where('type', 'STAFF')->count();
         $permanentCount = (clone $query)->where('status', 'TETAP')->count();
         $employees = $query->orderBy('branch_id')->orderBy('type')->orderBy('name')->paginate($this->perPage);
-        $branches = $user->role === 'admin_pusat' ? Branch::query()->orderBy('name')->get(['id', 'name', 'level']) : collect();
+        $branches = in_array($user->role, ['admin_pusat', 'keuangan_pusat'], true) ? Branch::query()->orderBy('name')->get(['id', 'name', 'level']) : collect();
 
         return view('livewire.employee-directory', compact('branches', 'employees', 'totalEmployees', 'teachersCount', 'staffCount', 'permanentCount'))
             ->layout('layouts.app', ['title' => 'Data pegawai dan guru']);

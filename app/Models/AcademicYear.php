@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
+use App\Traits\HasAuditLog;
 use App\Traits\HasUuidV7;
 use Illuminate\Database\Eloquent\Model;
 
 class AcademicYear extends Model
 {
-    use HasUuidV7;
+    use HasAuditLog, HasUuidV7;
 
     protected $fillable = ['name', 'starts_on', 'ends_on', 'is_active'];
 

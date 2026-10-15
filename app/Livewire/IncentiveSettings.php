@@ -7,6 +7,7 @@ use App\Models\AnnualIncentiveAssignment;
 use App\Models\Branch;
 use App\Models\BranchIncentive;
 use App\Models\Employee;
+use App\Models\TeacherHourlyRate;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
@@ -18,6 +19,8 @@ class IncentiveSettings extends Component
     public string $monthlyTransportAllowance = '0';
 
     public string $substitutionAllowancePerPeriod = '0';
+
+    public string $teacherHourlyRate = '0';
 
     public string $newIncentiveName = '';
 
@@ -37,13 +40,15 @@ class IncentiveSettings extends Component
 
     public function mount(): void
     {
+        $this->authorizePageAccess();
         $user = auth()->user();
-        if ($user->role !== 'admin_pusat') {
+        if (! in_array($user->role, ['admin_pusat', 'keuangan_pusat'], true)) {
             $this->branchId = (string) $user->branch_id;
         }
 
         $this->academicYearId = (string) (AcademicYear::query()->where('is_active', true)->value('id') ?? '');
         $this->loadBranchSettings();
+        $this->loadTeacherHourlyRate();
         $this->loadIncentiveDefinitions();
         $this->loadAnnualIncentiveAmounts();
     }
@@ -53,6 +58,7 @@ class IncentiveSettings extends Component
         $this->employeeId = '';
         $this->annualIncentiveAmounts = [];
         $this->loadBranchSettings();
+        $this->loadTeacherHourlyRate();
         $this->loadIncentiveDefinitions();
     }
 
@@ -63,11 +69,33 @@ class IncentiveSettings extends Component
 
     public function updatedAcademicYearId(): void
     {
+        $this->loadTeacherHourlyRate();
         $this->loadAnnualIncentiveAmounts();
+    }
+
+    public function saveTeacherHourlyRate(): void
+    {
+        abort_unless(auth()->user()->role === 'admin_pusat', 403);
+        $branchId = $this->effectiveBranchId();
+        abort_unless($branchId, 422, 'Pilih cabang sebelum mengatur tarif guru.');
+
+        $validated = $this->validate([
+            'branchId' => ['required', 'uuid', Rule::exists('branches', 'id')],
+            'academicYearId' => ['required', 'uuid', Rule::exists('academic_years', 'id')],
+            'teacherHourlyRate' => ['required', 'numeric', 'min:0', 'max:999999999999.99'],
+        ]);
+
+        TeacherHourlyRate::query()->updateOrCreate(
+            ['branch_id' => $branchId, 'academic_year_id' => $validated['academicYearId']],
+            ['amount' => $validated['teacherHourlyRate']]
+        );
+
+        session()->flash('success', 'Tarif gaji guru per jam berhasil disimpan.');
     }
 
     public function saveBranchPayrollSettings(): void
     {
+        abort_unless(auth()->user()->role === 'admin_pusat', 403);
         $branchId = $this->effectiveBranchId();
         abort_unless($branchId, 422, 'Pilih cabang sebelum mengatur tunjangan payroll.');
 
@@ -87,6 +115,7 @@ class IncentiveSettings extends Component
 
     public function addIncentiveType(): void
     {
+        $this->authorizeIncentiveDefinitionManagement();
         $branchId = $this->effectiveBranchId();
         abort_unless($branchId, 422, 'Pilih cabang sebelum menambahkan jenis insentif.');
 
@@ -119,6 +148,7 @@ class IncentiveSettings extends Component
 
     public function saveIncentiveType(string $incentiveId): void
     {
+        $this->authorizeIncentiveDefinitionManagement();
         $branchId = $this->effectiveBranchId();
         abort_unless($branchId, 422, 'Pilih cabang sebelum mengubah jenis insentif.');
 
@@ -157,6 +187,7 @@ class IncentiveSettings extends Component
 
     public function toggleIncentiveType(string $incentiveId): void
     {
+        $this->authorizeIncentiveDefinitionManagement();
         $branchId = $this->effectiveBranchId();
         abort_unless($branchId, 422, 'Pilih cabang sebelum mengubah jenis insentif.');
 
@@ -175,6 +206,7 @@ class IncentiveSettings extends Component
 
     public function saveAnnualIncentives(): void
     {
+        $this->authorizeSettingsManagement();
         $branchId = $this->effectiveBranchId();
         abort_unless($branchId, 422, 'Pilih cabang sebelum mengatur insentif tahunan.');
 
@@ -220,7 +252,22 @@ class IncentiveSettings extends Component
     {
         $user = auth()->user();
 
-        return $user->role === 'admin_pusat' ? ($this->branchId ?: null) : ($user->branch_id ?: null);
+        return in_array($user->role, ['admin_pusat', 'keuangan_pusat'], true) ? ($this->branchId ?: null) : ($user->branch_id ?: null);
+    }
+
+    private function authorizeSettingsManagement(): void
+    {
+        abort_unless(auth()->user()->role === 'keuangan_pusat', 403);
+    }
+
+    private function authorizeIncentiveDefinitionManagement(): void
+    {
+        abort_unless(auth()->user()->role === 'admin_pusat', 403);
+    }
+
+    private function authorizePageAccess(): void
+    {
+        abort_unless(in_array(auth()->user()->role, ['admin_pusat', 'keuangan_pusat', 'keuangan'], true), 403);
     }
 
     private function loadBranchSettings(): void
@@ -228,6 +275,17 @@ class IncentiveSettings extends Component
         $branch = $this->effectiveBranchId() ? Branch::query()->find($this->effectiveBranchId()) : null;
         $this->monthlyTransportAllowance = (string) ($branch?->monthly_transport_allowance ?? '0');
         $this->substitutionAllowancePerPeriod = (string) ($branch?->substitution_allowance_per_period ?? '0');
+    }
+
+    private function loadTeacherHourlyRate(): void
+    {
+        $rate = $this->effectiveBranchId() && $this->academicYearId
+            ? TeacherHourlyRate::query()
+                ->where('branch_id', $this->effectiveBranchId())
+                ->where('academic_year_id', $this->academicYearId)
+                ->value('amount')
+            : null;
+        $this->teacherHourlyRate = (string) ($rate ?? '0');
     }
 
     private function loadIncentiveDefinitions(): void
@@ -279,9 +337,10 @@ class IncentiveSettings extends Component
 
     public function render()
     {
+        $this->authorizePageAccess();
         $user = auth()->user();
         $branchId = $this->effectiveBranchId();
-        $branches = $user->role === 'admin_pusat' ? Branch::query()->orderBy('name')->get() : collect();
+        $branches = in_array($user->role, ['admin_pusat', 'keuangan_pusat'], true) ? Branch::query()->orderBy('name')->get() : collect();
         $employees = $branchId
             ? Employee::query()->where('branch_id', $branchId)->orderBy('name')->get(['id', 'name', 'nip', 'type'])
             : collect();

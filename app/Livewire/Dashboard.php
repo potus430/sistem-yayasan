@@ -26,10 +26,10 @@ class Dashboard extends Component
     public function render()
     {
         $user = auth()->user();
-        $canViewAllBranches = $user->role === 'admin_pusat';
+        $canViewAllBranches = in_array($user->role, ['admin_pusat', 'keuangan_pusat'], true);
         $branchId = $canViewAllBranches ? ($this->branchId ?: null) : $user->branch_id;
         $canManageSchool = in_array($user->role, ['admin_pusat', 'admin_cabang'], true);
-        $canViewFinance = in_array($user->role, ['admin_pusat', 'keuangan'], true);
+        $canViewFinance = in_array($user->role, ['admin_pusat', 'keuangan_pusat', 'keuangan'], true);
         $branches = $canViewAllBranches ? Branch::query()->orderBy('name')->get(['id', 'name', 'level']) : collect();
         $branch = $branchId ? Branch::query()->find($branchId, ['id', 'name', 'level']) : null;
         $activeAcademicYear = AcademicYear::query()->where('is_active', true)->first(['id', 'name']);

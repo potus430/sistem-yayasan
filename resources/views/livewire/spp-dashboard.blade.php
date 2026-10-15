@@ -6,7 +6,7 @@
     </div>
 
     <div class="grid gap-3 rounded-xl bg-white p-5 shadow-sm md:grid-cols-3">
-        @if(auth()->user()->role === 'admin_pusat')
+        @if(in_array(auth()->user()->role, ['admin_pusat', 'keuangan_pusat'], true))
             <label class="text-sm font-medium">Cabang
                 <select wire:model.live="branchId" class="mt-1 w-full rounded-lg border-slate-300">
                     <option value="">Semua cabang</option>
@@ -27,23 +27,43 @@
             </select>
         </label>
     </div>
+    <div class="rounded-xl bg-white p-4 shadow-sm">@include('livewire.partials.date-range-filter')</div>
 
-    <form wire:submit="generateMonthlyBills" class="grid gap-4 rounded-2xl border border-indigo-100 bg-gradient-to-br from-white to-indigo-50/60 p-5 shadow-sm md:grid-cols-2 lg:grid-cols-5 lg:items-end">
-        <div class="lg:col-span-2"><h2 class="font-semibold text-slate-900">Buat tagihan bulanan</h2><p class="mt-1 text-xs leading-5 text-slate-500">Tagihan yang sudah ada tidak akan ditimpa; aman dijalankan kembali.</p></div>
-        <label class="text-sm font-medium text-slate-700">Bulan
-            <select wire:model="generationMonth" required class="mt-1 w-full rounded-lg border-slate-200">
-                @foreach(range(1, 12) as $number)<option value="{{ $number }}">{{ \Illuminate\Support\Carbon::create()->month($number)->translatedFormat('F') }}</option>@endforeach
-            </select>
-        </label>
-        <label class="text-sm font-medium text-slate-700">Nominal tagihan (Rp)
-            <input wire:model="generationAmount" type="number" min="1" step="0.01" required placeholder="Contoh: 350000" class="mt-1 w-full rounded-lg border-slate-200">
-            @error('generationAmount')<span class="mt-1 block text-xs text-rose-600">{{ $message }}</span>@enderror
-        </label>
-        <button type="submit" wire:loading.attr="disabled" class="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60">Buat untuk siswa</button>
-        @error('generationMonth')<p class="text-xs text-rose-600">{{ $message }}</p>@enderror
-        @error('branchId')<p class="text-xs text-rose-600">{{ $message }}</p>@enderror
-        @error('academicYearId')<p class="text-xs text-rose-600">{{ $message }}</p>@enderror
-    </form>
+    @if(in_array(auth()->user()->role, ['admin_pusat', 'keuangan_pusat'], true) && $branchId)
+        <article class="space-y-4 rounded-2xl border border-indigo-100 bg-white p-5 shadow-sm">
+            <div><h2 class="font-semibold text-slate-900">Tarif SPP per kelas dan tahun ajaran</h2><p class="mt-1 text-sm text-slate-500">Tetapkan tarif di awal tahun ajaran. Tagihan baru akan mengambil nominal kelas ini sebagai snapshot.</p></div>
+            @if($classes->isNotEmpty())
+                <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    @foreach($classes as $class)
+                        <form wire:key="spp-class-fee-{{ $class->id }}" wire:submit="saveClassFee('{{ $class->id }}')" class="flex items-end gap-2 rounded-xl border border-slate-100 p-3">
+                            <label class="min-w-0 flex-1 text-sm font-medium text-slate-700">{{ $class->name }} · Rp/bulan
+                                <input wire:model="classFeeAmounts.{{ $class->id }}" type="number" min="0" step="0.01" required class="mt-1 w-full rounded-lg border-slate-200">
+                                @error("classFeeAmounts.{$class->id}")<span class="mt-1 block text-xs text-rose-600">{{ $message }}</span>@enderror
+                            </label>
+                            <button type="submit" class="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700">Simpan</button>
+                        </form>
+                    @endforeach
+                </div>
+            @else
+                <p class="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">Belum ada kelas di cabang ini. Admin cabang perlu menyiapkan master kelas terlebih dahulu.</p>
+            @endif
+        </article>
+    @endif
+
+    @if(auth()->user()->role === 'keuangan_pusat')
+        <form wire:submit="generateMonthlyBills" class="grid gap-4 rounded-2xl border border-indigo-100 bg-gradient-to-br from-white to-indigo-50/60 p-5 shadow-sm md:grid-cols-2 lg:grid-cols-4 lg:items-end">
+            <div class="lg:col-span-2"><h2 class="font-semibold text-slate-900">Buat tagihan bulanan</h2><p class="mt-1 text-xs leading-5 text-slate-500">Nominal setiap tagihan diambil dari tarif kelas untuk tahun ajaran terpilih; tagihan yang sudah ada tidak ditimpa.</p></div>
+            <label class="text-sm font-medium text-slate-700">Bulan
+                <select wire:model="generationMonth" required class="mt-1 w-full rounded-lg border-slate-200">
+                    @foreach(range(1, 12) as $number)<option value="{{ $number }}">{{ \Illuminate\Support\Carbon::create()->month($number)->translatedFormat('F') }}</option>@endforeach
+                </select>
+            </label>
+            <button type="submit" wire:loading.attr="disabled" class="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60">Buat tagihan siswa</button>
+            @error('generationMonth')<p class="text-xs text-rose-600 lg:col-span-4">{{ $message }}</p>@enderror
+            @error('branchId')<p class="text-xs text-rose-600">{{ $message }}</p>@enderror
+            @error('academicYearId')<p class="text-xs text-rose-600">{{ $message }}</p>@enderror
+        </form>
+    @endif
 
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <article class="rounded-xl bg-white p-5 shadow-sm"><p class="text-sm text-slate-500">Total tagihan</p><p class="mt-2 text-2xl font-bold">{{ number_format((int) ($summary->total_bills ?? 0)) }}</p></article>
@@ -54,7 +74,7 @@
 
     <div class="overflow-hidden rounded-xl bg-white shadow-sm">
         <div class="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <div><h2 class="font-semibold">Rincian tagihan</h2><p class="mt-1 text-sm text-slate-500">{{ number_format($billings->total()) }} data sesuai filter</p><a href="{{ route('reports.download', ['report' => 'spp', 'branch_id' => auth()->user()->role === 'admin_pusat' ? $branchId : null]) }}" class="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-indigo-700 hover:underline">Ekspor laporan CSV</a></div>
+            <div><h2 class="font-semibold">Rincian tagihan</h2><p class="mt-1 text-sm text-slate-500">{{ number_format($billings->total()) }} data sesuai filter</p><div class="mt-2 flex gap-3"><a href="{{ route('reports.download', array_merge(['report' => 'spp', 'branch_id' => $branchId ?: null, 'academic_year_id' => $academicYearId ?: null, 'month' => $month ?: null, 'format' => 'pdf'], $this->dateFilterQueryParameters())) }}" class="text-xs font-semibold text-rose-700 hover:underline">Ekspor PDF</a><a href="{{ route('reports.download', array_merge(['report' => 'spp', 'branch_id' => $branchId ?: null, 'academic_year_id' => $academicYearId ?: null, 'month' => $month ?: null, 'format' => 'xlsx'], $this->dateFilterQueryParameters())) }}" class="text-xs font-semibold text-emerald-700 hover:underline">Ekspor Excel</a></div></div>
             <label class="flex items-center gap-2 text-sm font-medium text-slate-600">Baris per halaman
                 <select wire:model.live="perPage" aria-label="Jumlah tagihan per halaman" class="rounded-lg border-slate-200 py-2 text-sm">
                     <option value="10">10</option><option value="25">25</option><option value="50">50</option><option value="100">100</option>
@@ -63,14 +83,14 @@
         </div>
         <div class="overflow-x-auto">
             <table class="min-w-full text-left text-sm">
-                <thead class="bg-slate-50 text-xs uppercase text-slate-500"><tr><th class="px-4 py-3">Siswa</th><th class="px-4 py-3">Cabang</th><th class="px-4 py-3">Kelas</th><th class="px-4 py-3">Bulan</th><th class="px-4 py-3">Jumlah</th><th class="px-4 py-3">Status</th></tr></thead>
+                <thead class="bg-slate-50 text-xs uppercase text-slate-500"><tr><th class="px-4 py-3">Siswa</th><th class="px-4 py-3">Cabang</th><th class="px-4 py-3">Kelas</th><th class="px-4 py-3">Bulan</th><th class="px-4 py-3">Jumlah</th><th class="px-4 py-3">Status</th>@if(auth()->user()->role === 'keuangan')<th class="px-4 py-3">Aksi</th>@endif</tr></thead>
                 <tbody class="divide-y divide-slate-100">
                     @forelse($billings as $billing)
                         <tr>
                             <td class="px-4 py-3">{{ $billing->student?->name ?? 'Siswa terhapus' }}<span class="block text-xs text-slate-500">{{ $billing->student?->nisn }}</span></td>
                             <td class="px-4 py-3">{{ $billing->branch?->name ?? '-' }}</td>
                             <td class="px-4 py-3">{{ $billing->student?->current_class ?? '-' }}</td>
-                            <td class="px-4 py-3">{{ \Illuminate\Support\Carbon::create()->month($billing->month)->translatedFormat('F') }}</td>
+                            <td class="px-4 py-3">{{ \Illuminate\Support\Carbon::create()->month($billing->month)->translatedFormat('F') }}<span class="block text-xs text-slate-500">Dibuat {{ $billing->created_at?->format('d M Y') ?? '—' }}</span></td>
                             <td class="px-4 py-3">
                                 <span class="font-semibold text-slate-800">Rp {{ number_format((float) $billing->amount, 0, ',', '.') }}</span>
                                 @if((float) $billing->paid_amount > 0 && $billing->status !== 'PAID')<span class="mt-1 block text-xs text-sky-700">Terbayar Rp {{ number_format((float) $billing->paid_amount, 0, ',', '.') }}</span>@endif
@@ -82,8 +102,10 @@
                             </td>
                             <td class="whitespace-nowrap px-4 py-3">
                                 <span class="rounded-full px-2.5 py-1 text-xs font-semibold {{ $billing->status === 'PAID' ? 'bg-emerald-100 text-emerald-700' : ((float) $billing->paid_amount > 0 ? 'bg-sky-100 text-sky-700' : 'bg-amber-100 text-amber-700') }}">{{ $billing->status === 'PAID' ? 'Lunas' : ((float) $billing->paid_amount > 0 ? 'Cicilan' : 'Belum lunas') }}</span>
-                                @if($billing->status !== 'PAID')<button type="button" wire:click="openPayment('{{ $billing->id }}')" class="ml-2 rounded-lg bg-indigo-50 px-2.5 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100">Catat bayar</button>@endif
                             </td>
+                            @if(auth()->user()->role === 'keuangan')
+                                <td class="whitespace-nowrap px-4 py-3">@if($billing->status !== 'PAID')<button type="button" wire:click="openPayment('{{ $billing->id }}')" class="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-700">Terima pembayaran</button>@else<span class="text-xs text-slate-400">Sudah lunas</span>@endif</td>
+                            @endif
                         </tr>
                     @empty
                         <tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">Tidak ada tagihan pada filter ini.</td></tr>

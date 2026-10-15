@@ -13,6 +13,7 @@
         .muted { color: #64748b; }
         .slip-grid { border-collapse: separate; border-spacing: 4mm; table-layout: fixed; width: 100%; }
         .slip-cell { padding: 0; vertical-align: top; width: 50%; }
+        .single-slip .slip-cell { width: 100%; }
         .slip { border: 1px solid #94a3b8; height: 112mm; padding: 4mm; }
         .slip-header { border-bottom: 1px solid #cbd5e1; margin-bottom: 2mm; padding-bottom: 2mm; }
         .slip-title { color: #0f172a; font-size: 11px; font-weight: bold; }
@@ -58,9 +59,11 @@
             </table>
         </div>
 
-        <table class="slip-grid">
-            <tbody><tr>
-                    @foreach($rows as $salary)
+        <table class="slip-grid {{ $perPage === 1 ? 'single-slip' : '' }}">
+            <tbody>
+                @foreach($rows as $row)
+                    <tr>
+                    @foreach($row as $salary)
                         @php
                             $employee = $salary->employee;
                             $branch = $employee?->branch;
@@ -88,7 +91,15 @@
                                     <thead><tr><th>Keterangan</th><th class="amount">Jumlah (Rp)</th></tr></thead>
                                     <tbody>
                                         <tr class="section-row"><td colspan="2">PENGHASILAN</td></tr>
-                                        <tr><td>Gaji pokok</td><td class="amount">{{ number_format((float) ($employee?->base_salary ?? 0), 0, ',', '.') }}</td></tr>
+                                        <tr>
+                                            <td>
+                                                Gaji pokok
+                                                @if($employee?->type === 'GURU')
+                                                    <span class="muted">({{ $salary->teaching_hours }} jam × Rp {{ number_format((float) $salary->hourly_rate, 0, ',', '.') }}/jam)</span>
+                                                @endif
+                                            </td>
+                                            <td class="amount">{{ number_format((float) $salary->base_salary, 0, ',', '.') }}</td>
+                                        </tr>
                                         @foreach($salary->position_details ?? [] as $positionDetail)
                                             @if((float) ($positionDetail['salary_addition'] ?? 0) > 0)
                                                 <tr>
@@ -121,7 +132,7 @@
                                                 <tr><td>Tunjangan</td><td class="amount">{{ number_format((float) $salary->allowances, 0, ',', '.') }}</td></tr>
                                             @endif
                                         @endforelse
-                                        <tr class="total-row"><td>Total penghasilan</td><td class="amount">{{ number_format((float) ($employee?->base_salary ?? 0) + (float) $salary->position_salary + (float) $salary->incentives + (float) $salary->allowances, 0, ',', '.') }}</td></tr>
+                                        <tr class="total-row"><td>Total penghasilan</td><td class="amount">{{ number_format((float) $salary->base_salary + (float) $salary->position_salary + (float) $salary->incentives + (float) $salary->allowances, 0, ',', '.') }}</td></tr>
                                         <tr class="section-row"><td colspan="2">POTONGAN</td></tr>
                                         <tr><td>Potongan absensi/lainnya</td><td class="amount">{{ number_format((float) $salary->deductions, 0, ',', '.') }}</td></tr>
                                         <tr class="net-row"><td>GAJI BERSIH</td><td class="amount">{{ number_format((float) $salary->net_salary, 0, ',', '.') }}</td></tr>
@@ -135,8 +146,10 @@
                             </div>
                         </td>
                     @endforeach
-                    @if($rows->count() < 2)<td class="slip-cell empty-cell"></td>@endif
-            </tr></tbody>
+                    @if($row->count() < 2)<td class="slip-cell empty-cell"></td>@endif
+                    </tr>
+                @endforeach
+            </tbody>
         </table>
     </div>
 @endforeach

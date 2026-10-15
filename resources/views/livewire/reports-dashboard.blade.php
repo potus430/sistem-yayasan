@@ -42,7 +42,7 @@
         <section>
             <div class="mb-3 flex items-end justify-between gap-3">
                 <div><h2 class="text-lg font-bold text-slate-900">Operasional sekolah</h2><p class="text-sm text-slate-500">Absensi untuk {{ $periodDate->locale('id')->translatedFormat('F Y') }}</p></div>
-                <a href="{{ route('reports.download', ['report' => 'students', 'branch_id' => $branchId ?: null]) }}" class="text-sm font-semibold text-indigo-700 hover:underline">Ekspor siswa CSV</a>
+                <div class="flex gap-3"><a href="{{ route('reports.download', ['report' => 'students', 'branch_id' => $branchId ?: null, 'format' => 'pdf']) }}" class="text-sm font-semibold text-rose-700 hover:underline">Siswa PDF</a><a href="{{ route('reports.download', ['report' => 'students', 'branch_id' => $branchId ?: null, 'format' => 'xlsx']) }}" class="text-sm font-semibold text-emerald-700 hover:underline">Siswa Excel</a></div>
             </div>
             <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <article class="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm"><p class="text-sm text-slate-500">Siswa terdaftar</p><p class="mt-3 text-3xl font-bold">{{ number_format($school['students']) }}</p></article>
@@ -61,7 +61,9 @@
         <section>
             <div class="mb-3 flex items-end justify-between gap-3">
                 <div><h2 class="text-lg font-bold text-slate-900">Keuangan</h2><p class="text-sm text-slate-500">Payroll {{ $periodDate->locale('id')->translatedFormat('F Y') }} · SPP tahun ajaran {{ $academicYears->firstWhere('id', $academicYearId)?->name ?? '—' }}</p></div>
-                <a href="{{ route('reports.download', ['report' => 'payroll', 'period' => $period, 'branch_id' => $branchId ?: null]) }}" class="text-sm font-semibold text-indigo-700 hover:underline">Ekspor payroll CSV</a>
+                @if(auth()->user()->role === 'keuangan_pusat')
+                    <div class="flex gap-3"><a href="{{ route('reports.download', ['report' => 'payroll', 'period' => $period, 'branch_id' => $branchId ?: null, 'format' => 'pdf']) }}" class="text-sm font-semibold text-rose-700 hover:underline">Payroll PDF</a><a href="{{ route('payroll.export.xlsx', ['period' => $period, 'branch_id' => $branchId ?: null]) }}" class="text-sm font-semibold text-emerald-700 hover:underline">Payroll Excel</a></div>
+                @endif
             </div>
             <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <article class="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm"><p class="text-sm text-slate-500">Payroll dibayar</p><p class="mt-3 text-2xl font-bold text-emerald-700">Rp {{ number_format($finance['payroll_paid_amount'], 0, ',', '.') }}</p><p class="mt-1 text-xs text-slate-500">{{ number_format($finance['payroll_paid_count']) }} pegawai dari {{ number_format($finance['payroll_total']) }}</p></article>
@@ -70,7 +72,8 @@
                 <article class="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm"><p class="text-sm text-slate-500">SPP belum tertagih</p><p class="mt-3 text-2xl font-bold text-rose-700">Rp {{ number_format($finance['spp_outstanding'], 0, ',', '.') }}</p><p class="mt-1 text-xs text-slate-500">{{ number_format($finance['spp_unpaid_count']) }} tagihan berstatus belum lunas</p></article>
             </div>
             <div class="mt-4 flex flex-wrap gap-3">
-                <a href="{{ route('reports.download', ['report' => 'spp', 'branch_id' => $branchId ?: null]) }}" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Ekspor laporan SPP</a>
+                <a href="{{ route('reports.download', ['report' => 'spp', 'branch_id' => $branchId ?: null, 'format' => 'pdf']) }}" class="rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50">Ekspor SPP PDF</a>
+                <a href="{{ route('reports.download', ['report' => 'spp', 'branch_id' => $branchId ?: null, 'format' => 'xlsx']) }}" class="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50">Ekspor SPP Excel</a>
                 <a href="{{ route('payroll.slips.pdf', ['period' => $period, 'branch_id' => $branchId ?: null]) }}" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Unduh slip gaji PDF</a>
                 <a href="{{ route('payroll.export.xlsx', ['period' => $period, 'branch_id' => $branchId ?: null]) }}" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Ekspor payroll Excel</a>
             </div>
@@ -79,7 +82,7 @@
 
     @if($isCentralAdmin && $branchSummaries->isNotEmpty())
         <section class="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
-            <div class="border-b border-slate-100 px-5 py-4"><h2 class="font-bold text-slate-900">Ikhtisar seluruh cabang</h2><p class="mt-1 text-sm text-slate-500">Ringkasan sekolah dan keuangan berdasarkan filter periode terpilih.</p></div>
+            <div class="border-b border-slate-100 px-5 py-4"><h2 class="font-bold text-slate-900">Ikhtisar seluruh cabang</h2><p class="mt-1 text-sm text-slate-500">Ringkasan sekolah dan keuangan berdasarkan filter periode terpilih.</p><div class="mt-2 flex gap-3"><a href="{{ route('reports.download', ['report' => 'branch-summary', 'period' => $period, 'academic_year_id' => $academicYearId, 'from' => $periodDate->copy()->startOfMonth()->toDateString(), 'to' => $periodDate->copy()->endOfMonth()->toDateString(), 'format' => 'pdf']) }}" class="text-xs font-semibold text-rose-700 hover:underline">Ekspor ikhtisar PDF</a><a href="{{ route('reports.download', ['report' => 'branch-summary', 'period' => $period, 'academic_year_id' => $academicYearId, 'from' => $periodDate->copy()->startOfMonth()->toDateString(), 'to' => $periodDate->copy()->endOfMonth()->toDateString(), 'format' => 'xlsx']) }}" class="text-xs font-semibold text-emerald-700 hover:underline">Ekspor ikhtisar Excel</a></div></div>
             <div class="overflow-x-auto">
                 <table class="min-w-full text-left text-sm">
                     <thead class="bg-slate-50 text-xs uppercase text-slate-500"><tr><th class="px-4 py-3">Cabang</th>@if($canViewSchool)<th class="px-4 py-3">Siswa</th><th class="px-4 py-3">Pegawai</th><th class="px-4 py-3">Hadir / tidak hadir</th>@endif @if($canViewFinance)<th class="px-4 py-3">Payroll dibayar / menunggu</th><th class="px-4 py-3">SPP terkumpul / sisa</th>@endif</tr></thead>

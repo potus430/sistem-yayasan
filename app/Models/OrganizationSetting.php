@@ -2,13 +2,14 @@
 
 namespace App\Models;
 
+use App\Traits\HasAuditLog;
 use App\Traits\HasUuidV7;
 use Illuminate\Database\Eloquent\Model;
 use LogicException;
 
 class OrganizationSetting extends Model
 {
-    use HasUuidV7;
+    use HasAuditLog, HasUuidV7;
 
     protected $fillable = [
         'application_name',

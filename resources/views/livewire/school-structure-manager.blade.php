@@ -24,13 +24,13 @@
             <article class="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
                 <div class="flex items-center justify-between gap-4 border-b border-slate-100 p-5">
                     <div><h2 class="text-lg font-bold text-slate-900">Daftar kelas</h2><p class="mt-1 text-sm text-slate-500">{{ number_format($classes->count()) }} kelas terdaftar</p></div>
-                    <button type="button" wire:click="create('class')" class="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-3.5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"><span class="text-lg leading-none">+</span>Tambah kelas</button>
+                    @if(auth()->user()->role === 'admin_cabang')<button type="button" wire:click="create('class')" class="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-3.5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"><span class="text-lg leading-none">+</span>Tambah kelas</button>@endif
                 </div>
                 <div class="divide-y divide-slate-100">
                     @forelse($classes as $class)
                         <div wire:key="school-class-{{ $class->id }}" class="flex items-center justify-between gap-4 px-5 py-4 transition hover:bg-indigo-50/40">
                             <div class="flex min-w-0 items-center gap-3"><span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-sm font-bold text-indigo-700">{{ strtoupper(substr($class->name, 0, 2)) }}</span><div class="min-w-0"><p class="truncate font-semibold text-slate-900">{{ $class->name }}</p><p class="text-xs text-slate-500">Tersedia untuk data siswa dan roster</p></div></div>
-                            <div class="flex shrink-0 gap-1"><button type="button" wire:click="edit('class', '{{ $class->id }}')" class="rounded-lg px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100">Edit</button><button type="button" wire:click="delete('class', '{{ $class->id }}')" wire:confirm="Hapus kelas {{ $class->name }}? Kelas yang masih digunakan tidak dapat dihapus." class="rounded-lg px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50">Hapus</button></div>
+                            @if(auth()->user()->role === 'admin_cabang')<div class="flex shrink-0 gap-1"><button type="button" wire:click="edit('class', '{{ $class->id }}')" class="rounded-lg px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100">Edit</button><button type="button" wire:click="delete('class', '{{ $class->id }}')" wire:confirm="Hapus kelas {{ $class->name }}? Kelas yang masih digunakan tidak dapat dihapus." class="rounded-lg px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50">Hapus</button></div>@endif
                         </div>
                     @empty
                         <div class="px-5 py-12 text-center"><p class="font-semibold text-slate-800">Belum ada data kelas</p><p class="mt-1 text-sm text-slate-500">Tambahkan kelas untuk dapat memasukkan siswa dan menyusun roster.</p></div>
@@ -41,13 +41,13 @@
             <article class="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm xl:col-span-2">
                 <div class="flex items-center justify-between gap-4 border-b border-slate-100 p-5">
                     <div><h2 class="text-lg font-bold text-slate-900">Mata pelajaran</h2><p class="mt-1 text-sm text-slate-500">{{ number_format($subjects->count()) }} mata pelajaran · digunakan saat menyusun roster</p></div>
-                    <button type="button" wire:click="create('subject')" class="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-3.5 py-2.5 text-sm font-semibold text-white hover:bg-violet-700"><span class="text-lg leading-none">+</span>Tambah mapel</button>
+                    @if(auth()->user()->role === 'admin_cabang')<button type="button" wire:click="create('subject')" class="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-3.5 py-2.5 text-sm font-semibold text-white hover:bg-violet-700"><span class="text-lg leading-none">+</span>Tambah mapel</button>@endif
                 </div>
                 <div class="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-3">
                     @forelse($subjects as $subject)
                         <div wire:key="school-subject-{{ $subject->id }}" class="flex items-center justify-between gap-3 rounded-xl border border-slate-100 p-3 transition hover:border-violet-200 hover:bg-violet-50/40">
                             <div class="flex min-w-0 items-center gap-3"><span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-xs font-bold text-violet-700">M</span><p class="truncate text-sm font-semibold text-slate-800">{{ $subject->name }}</p></div>
-                            <div class="flex shrink-0 gap-1"><button type="button" wire:click="edit('subject', '{{ $subject->id }}')" class="rounded-lg px-2 py-1.5 text-xs font-semibold text-violet-700 hover:bg-violet-100">Edit</button><button type="button" wire:click="delete('subject', '{{ $subject->id }}')" wire:confirm="Hapus mata pelajaran {{ $subject->name }}? Mata pelajaran pada roster tidak dapat dihapus." class="rounded-lg px-2 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50">Hapus</button></div>
+                            @if(auth()->user()->role === 'admin_cabang')<div class="flex shrink-0 gap-1"><button type="button" wire:click="edit('subject', '{{ $subject->id }}')" class="rounded-lg px-2 py-1.5 text-xs font-semibold text-violet-700 hover:bg-violet-100">Edit</button><button type="button" wire:click="delete('subject', '{{ $subject->id }}')" wire:confirm="Hapus mata pelajaran {{ $subject->name }}? Mata pelajaran pada roster tidak dapat dihapus." class="rounded-lg px-2 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50">Hapus</button></div>@endif
                         </div>
                     @empty
                         <p class="text-sm text-slate-500">Belum ada mata pelajaran. Tambahkan mapel untuk mengaktifkan generator roster.</p>
@@ -58,13 +58,13 @@
             <article class="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
                 <div class="flex items-center justify-between gap-4 border-b border-slate-100 p-5">
                     <div><h2 class="text-lg font-bold text-slate-900">Daftar ruangan</h2><p class="mt-1 text-sm text-slate-500">{{ number_format($rooms->count()) }} ruangan terdaftar</p></div>
-                    <button type="button" wire:click="create('room')" class="inline-flex items-center gap-2 rounded-xl bg-sky-600 px-3.5 py-2.5 text-sm font-semibold text-white hover:bg-sky-700"><span class="text-lg leading-none">+</span>Tambah ruangan</button>
+                    @if(auth()->user()->role === 'admin_cabang')<button type="button" wire:click="create('room')" class="inline-flex items-center gap-2 rounded-xl bg-sky-600 px-3.5 py-2.5 text-sm font-semibold text-white hover:bg-sky-700"><span class="text-lg leading-none">+</span>Tambah ruangan</button>@endif
                 </div>
                 <div class="divide-y divide-slate-100">
                     @forelse($rooms as $room)
                         <div wire:key="school-room-{{ $room->id }}" class="flex items-center justify-between gap-4 px-5 py-4 transition hover:bg-sky-50/40">
                             <div class="flex min-w-0 items-center gap-3"><span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-700"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6M9 9h.01M15 9h.01"/></svg></span><div class="min-w-0"><p class="truncate font-semibold text-slate-900">{{ $room->name }}</p><p class="text-xs text-slate-500">Lokasi belajar untuk jadwal pelajaran</p></div></div>
-                            <div class="flex shrink-0 gap-1"><button type="button" wire:click="edit('room', '{{ $room->id }}')" class="rounded-lg px-3 py-2 text-xs font-semibold text-sky-700 hover:bg-sky-100">Edit</button><button type="button" wire:click="delete('room', '{{ $room->id }}')" wire:confirm="Hapus ruangan {{ $room->name }}? Ruangan yang masih digunakan tidak dapat dihapus." class="rounded-lg px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50">Hapus</button></div>
+                            @if(auth()->user()->role === 'admin_cabang')<div class="flex shrink-0 gap-1"><button type="button" wire:click="edit('room', '{{ $room->id }}')" class="rounded-lg px-3 py-2 text-xs font-semibold text-sky-700 hover:bg-sky-100">Edit</button><button type="button" wire:click="delete('room', '{{ $room->id }}')" wire:confirm="Hapus ruangan {{ $room->name }}? Ruangan yang masih digunakan tidak dapat dihapus." class="rounded-lg px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50">Hapus</button></div>@endif
                         </div>
                     @empty
                         <div class="px-5 py-12 text-center"><p class="font-semibold text-slate-800">Belum ada data ruangan</p><p class="mt-1 text-sm text-slate-500">Tambahkan ruangan sebelum membuat roster pelajaran.</p></div>
@@ -76,7 +76,7 @@
         <div class="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">Pilih cabang terlebih dahulu untuk melihat atau mengatur kelas dan ruangan.</div>
     @endif
 
-    @if($showForm)
+    @if($showForm && auth()->user()->role === 'admin_cabang')
         <div class="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="structure-form-title">
             <form wire:submit="save" class="w-full max-w-lg space-y-5 rounded-3xl bg-white p-6 shadow-2xl sm:p-8">
                 <div class="flex items-start justify-between gap-4">

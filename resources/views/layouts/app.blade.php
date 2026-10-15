@@ -6,7 +6,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>{{ $title ?? 'Dashboard' }} · {{ $applicationBrand }} · {{ $organizationSettings->foundation_name }}</title>
+    <link rel="icon" type="image/x-icon" href="{{ asset('favicon.ico') }}?v=2">
+    <title>{{ $applicationBrand }} · {{ $organizationSettings->foundation_name }}</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @livewireStyles
 </head>
@@ -19,27 +20,31 @@
                 @else
                     <span class="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-400 to-violet-600 text-lg font-black shadow-lg shadow-indigo-950/40">Y</span>
                 @endif
-                <div class="min-w-0"><a href="{{ route('dashboard') }}" class="block truncate font-bold tracking-tight">{{ $applicationBrand }}</a><span class="block truncate text-xs text-slate-400">{{ $organizationSettings->foundation_name }}</span></div>
+                <div class="min-w-0"><a href="{{ route(auth()->user()->role === 'staff_pusat' ? 'profile' : 'dashboard') }}" class="block truncate font-bold tracking-tight">{{ $applicationBrand }}</a><span class="block truncate text-xs text-slate-400">{{ $organizationSettings->foundation_name }}</span></div>
             </div>
             <div class="mx-4 border-t border-white/10"></div>
             <nav class="flex gap-1 overflow-x-auto px-3 py-4 text-sm lg:flex-1 lg:flex-col lg:overflow-y-auto">
                 <p class="hidden px-3 pb-2 pt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 lg:block">Menu utama</p>
-                <a href="{{ route('dashboard') }}" class="flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 font-medium transition {{ request()->routeIs('dashboard') ? 'bg-indigo-500/20 text-indigo-200 ring-1 ring-inset ring-indigo-400/20' : 'text-slate-300 hover:bg-white/5 hover:text-white' }}">
-                    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/></svg>Dashboard
-                </a>
+                @if(auth()->user()->role !== 'staff_pusat')
+                    <a href="{{ route('dashboard') }}" class="flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 font-medium transition {{ request()->routeIs('dashboard') ? 'bg-indigo-500/20 text-indigo-200 ring-1 ring-inset ring-indigo-400/20' : 'text-slate-300 hover:bg-white/5 hover:text-white' }}">
+                        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/></svg>Dashboard
+                    </a>
+                @endif
                 <a href="{{ route('profile') }}" class="flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 font-medium transition {{ request()->routeIs('profile') ? 'bg-indigo-500/20 text-indigo-200 ring-1 ring-inset ring-indigo-400/20' : 'text-slate-300 hover:bg-white/5 hover:text-white' }}">
                     <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></svg>Profil saya
                 </a>
-                @if(in_array(auth()->user()->role, ['admin_pusat', 'admin_cabang', 'keuangan']))
+                @if(in_array(auth()->user()->role, ['admin_pusat', 'keuangan_pusat', 'admin_cabang', 'keuangan']))
                     <a href="{{ route('reports') }}" class="flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 font-medium transition {{ request()->routeIs('reports') ? 'bg-indigo-500/20 text-indigo-200 ring-1 ring-inset ring-indigo-400/20' : 'text-slate-300 hover:bg-white/5 hover:text-white' }}">
                         <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V5M4 19h17M8 16v-5m4 5V7m4 9v-7m4 7v-3"/></svg>Laporan cabang
                     </a>
                 @endif
-                @if(in_array(auth()->user()->role, ['admin_pusat', 'admin_cabang']))
+                @if(in_array(auth()->user()->role, ['admin_pusat', 'keuangan_pusat', 'admin_cabang']))
                     <p class="hidden px-3 pb-2 pt-3 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 lg:block">Data sekolah</p>
-                    <a href="{{ route('position-compensation') }}" class="flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 font-medium transition {{ request()->routeIs('position-compensation') ? 'bg-indigo-500/20 text-indigo-200 ring-1 ring-inset ring-indigo-400/20' : 'text-slate-300 hover:bg-white/5 hover:text-white' }}">
-                        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2M8 8h8"/></svg>Jabatan & kompensasi
-                    </a>
+                    @if(in_array(auth()->user()->role, ['admin_pusat', 'admin_cabang']))
+                        <a href="{{ route('position-compensation') }}" class="flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 font-medium transition {{ request()->routeIs('position-compensation') ? 'bg-indigo-500/20 text-indigo-200 ring-1 ring-inset ring-indigo-400/20' : 'text-slate-300 hover:bg-white/5 hover:text-white' }}">
+                            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2M8 8h8"/></svg>Jabatan & kompensasi
+                        </a>
+                    @endif
                     @if(auth()->user()->role === 'admin_pusat')
                         <a href="{{ route('branches') }}" class="flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 font-medium transition {{ request()->routeIs('branches') ? 'bg-indigo-500/20 text-indigo-200 ring-1 ring-inset ring-indigo-400/20' : 'text-slate-300 hover:bg-white/5 hover:text-white' }}">
                             <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6M9 9h.01M15 9h.01"/></svg>Data cabang
@@ -54,12 +59,16 @@
                     <a href="{{ route('employees') }}" class="flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 font-medium transition {{ request()->routeIs('employees') ? 'bg-indigo-500/20 text-indigo-200 ring-1 ring-inset ring-indigo-400/20' : 'text-slate-300 hover:bg-white/5 hover:text-white' }}">
                         <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="4"/><path d="M3 21v-2a6 6 0 0 1 12 0v2M16 4.5a4 4 0 0 1 0 7.75M19 14a5 5 0 0 1 2 4v3"/></svg>Guru & pegawai
                     </a>
-                    <a href="{{ route('students') }}" class="flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 font-medium transition {{ request()->routeIs('students') ? 'bg-indigo-500/20 text-indigo-200 ring-1 ring-inset ring-indigo-400/20' : 'text-slate-300 hover:bg-white/5 hover:text-white' }}">
-                        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 10v6M2 10l10-5 10 5-10 5-10-5Z"/><path d="M6 12v5c3.3 2.7 8.7 2.7 12 0v-5"/></svg>Data siswa
-                    </a>
-                    <a href="{{ route('school-structure') }}" class="flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 font-medium transition {{ request()->routeIs('school-structure') ? 'bg-indigo-500/20 text-indigo-200 ring-1 ring-inset ring-indigo-400/20' : 'text-slate-300 hover:bg-white/5 hover:text-white' }}">
-                        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6M9 9h.01M15 9h.01"/></svg>Kelas & ruangan
-                    </a>
+                    @if(in_array(auth()->user()->role, ['admin_pusat', 'admin_cabang']))
+                        <a href="{{ route('students') }}" class="flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 font-medium transition {{ request()->routeIs('students') ? 'bg-indigo-500/20 text-indigo-200 ring-1 ring-inset ring-indigo-400/20' : 'text-slate-300 hover:bg-white/5 hover:text-white' }}">
+                            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 10v6M2 10l10-5 10 5-10 5-10-5Z"/><path d="M6 12v5c3.3 2.7 8.7 2.7 12 0v-5"/></svg>Data siswa
+                        </a>
+                    @endif
+                    @if(in_array(auth()->user()->role, ['admin_pusat', 'admin_cabang']))
+                        <a href="{{ route('school-structure') }}" class="flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 font-medium transition {{ request()->routeIs('school-structure') ? 'bg-indigo-500/20 text-indigo-200 ring-1 ring-inset ring-indigo-400/20' : 'text-slate-300 hover:bg-white/5 hover:text-white' }}">
+                            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6M9 9h.01M15 9h.01"/></svg>Kelas & ruangan
+                        </a>
+                    @endif
                 @endif
                 @if(in_array(auth()->user()->role, ['admin_pusat', 'admin_cabang']))
                     <a href="{{ route('attendance') }}" class="flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 font-medium transition {{ request()->routeIs('attendance') ? 'bg-indigo-500/20 text-indigo-200 ring-1 ring-inset ring-indigo-400/20' : 'text-slate-300 hover:bg-white/5 hover:text-white' }}">
@@ -71,21 +80,32 @@
                         <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Roster pelajaran
                     </a>
                 @endif
-                @if(in_array(auth()->user()->role, ['admin_pusat', 'keuangan']))
+                @if(in_array(auth()->user()->role, ['admin_pusat', 'keuangan_pusat', 'keuangan']))
                     <p class="hidden px-3 pb-2 pt-5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 lg:block">Keuangan</p>
                     @if(auth()->user()->role === 'keuangan')
                         <a href="{{ route('position-compensation') }}" class="flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 font-medium transition {{ request()->routeIs('position-compensation') ? 'bg-indigo-500/20 text-indigo-200 ring-1 ring-inset ring-indigo-400/20' : 'text-slate-300 hover:bg-white/5 hover:text-white' }}">
                             <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2M8 8h8"/></svg>Jabatan & kompensasi
                         </a>
                     @endif
+                    @if(in_array(auth()->user()->role, ['admin_pusat', 'keuangan_pusat', 'keuangan']))
                     <a href="{{ route('payroll') }}" class="flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 font-medium transition {{ request()->routeIs('payroll') ? 'bg-indigo-500/20 text-indigo-200 ring-1 ring-inset ring-indigo-400/20' : 'text-slate-300 hover:bg-white/5 hover:text-white' }}">
                         <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h3"/></svg>Penggajian
                     </a>
+                    @endif
+                    @if(in_array(auth()->user()->role, ['admin_pusat', 'keuangan_pusat', 'keuangan']))
                     <a href="{{ route('incentives') }}" class="flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 font-medium transition {{ request()->routeIs('incentives') ? 'bg-indigo-500/20 text-indigo-200 ring-1 ring-inset ring-indigo-400/20' : 'text-slate-300 hover:bg-white/5 hover:text-white' }}">
                         <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Insentif & tunjangan
                     </a>
+                    @endif
+                    @if(in_array(auth()->user()->role, ['admin_pusat', 'keuangan_pusat', 'keuangan']))
                     <a href="{{ route('spp') }}" class="flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 font-medium transition {{ request()->routeIs('spp') ? 'bg-indigo-500/20 text-indigo-200 ring-1 ring-inset ring-indigo-400/20' : 'text-slate-300 hover:bg-white/5 hover:text-white' }}">
                         <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Pembayaran SPP
+                    </a>
+                    @endif
+                @endif
+                @if(auth()->user()->role === 'admin_pusat')
+                    <a href="{{ route('activity-logs') }}" class="flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 font-medium transition {{ request()->routeIs('activity-logs') ? 'bg-indigo-500/20 text-indigo-200 ring-1 ring-inset ring-indigo-400/20' : 'text-slate-300 hover:bg-white/5 hover:text-white' }}">
+                        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg>Log aktivitas
                     </a>
                 @endif
             </nav>

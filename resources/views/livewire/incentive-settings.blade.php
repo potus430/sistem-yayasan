@@ -14,7 +14,7 @@
         <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{{ session('success') }}</div>
     @endif
 
-    @if(auth()->user()->role === 'admin_pusat')
+    @if(in_array(auth()->user()->role, ['admin_pusat', 'keuangan_pusat'], true))
         <section class="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
             <label class="block max-w-xl text-sm font-semibold text-slate-700">Cabang sekolah
                 <select wire:model.live="branchId" class="mt-1.5 w-full rounded-xl border-slate-200">
@@ -29,6 +29,31 @@
     @endif
 
     @if($branchId)
+        @if(auth()->user()->role === 'admin_pusat')
+            <article class="space-y-4 rounded-2xl border border-indigo-100 bg-white p-5 shadow-sm">
+                <div>
+                    <h2 class="font-semibold text-slate-900">Tarif gaji pokok guru per jam</h2>
+                    <p class="mt-1 text-sm text-slate-500">Tarif berlaku untuk cabang dan tahun ajaran terpilih. Gaji pokok bulanan guru dihitung dari tarif ini dikalikan jam mengajar pada roster yang jatuh dalam bulan payroll.</p>
+                </div>
+                <label class="block max-w-xl text-sm font-medium text-slate-700">Tahun ajaran
+                    <select wire:model.live="academicYearId" class="mt-1.5 w-full rounded-xl border-slate-200">
+                        <option value="">Pilih tahun ajaran</option>
+                        @foreach($academicYears as $year)
+                            <option value="{{ $year->id }}">{{ $year->name }}</option>
+                        @endforeach
+                    </select>
+                    @error('academicYearId')<span class="mt-1 block text-sm text-rose-600">{{ $message }}</span>@enderror
+                </label>
+                <form wire:submit="saveTeacherHourlyRate" class="flex flex-wrap items-end gap-3">
+                    <label class="min-w-64 flex-1 text-sm font-medium text-slate-700">Tarif per jam mengajar (Rp)
+                        <input type="number" min="0" step="0.01" wire:model="teacherHourlyRate" required class="mt-1.5 w-full rounded-xl border-slate-200">
+                        @error('teacherHourlyRate')<span class="mt-1 block text-sm text-rose-600">{{ $message }}</span>@enderror
+                    </label>
+                    <button type="submit" class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">Simpan tarif guru</button>
+                </form>
+            </article>
+        @endif
+
         <section class="grid gap-6 xl:grid-cols-2">
             <article class="space-y-4 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
                 <div>
@@ -36,16 +61,19 @@
                     <p class="mt-1 text-sm text-slate-500">Nilai transport berlaku per bulan untuk pegawai. Tarif invalen dikalikan jumlah jam pengganti guru yang tercatat pada periode payroll.</p>
                 </div>
                 <label class="block text-sm font-medium text-slate-700">Transport bulanan per pegawai (Rp)
-                    <input type="number" min="0" step="0.01" wire:model="monthlyTransportAllowance" class="mt-1.5 w-full rounded-xl border-slate-200">
+                    <input type="number" min="0" step="0.01" wire:model="monthlyTransportAllowance" @disabled(auth()->user()->role !== 'admin_pusat') class="mt-1.5 w-full rounded-xl border-slate-200">
                     @error('monthlyTransportAllowance')<span class="mt-1 block text-sm text-rose-600">{{ $message }}</span>@enderror
                 </label>
                 <label class="block text-sm font-medium text-slate-700">Tarif invalen per jam pengganti (Rp)
-                    <input type="number" min="0" step="0.01" wire:model="substitutionAllowancePerPeriod" class="mt-1.5 w-full rounded-xl border-slate-200">
+                    <input type="number" min="0" step="0.01" wire:model="substitutionAllowancePerPeriod" @disabled(auth()->user()->role !== 'admin_pusat') class="mt-1.5 w-full rounded-xl border-slate-200">
                     @error('substitutionAllowancePerPeriod')<span class="mt-1 block text-sm text-rose-600">{{ $message }}</span>@enderror
                 </label>
-                <button type="button" wire:click="saveBranchPayrollSettings" class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">Simpan tarif cabang</button>
+                @if(auth()->user()->role === 'admin_pusat')
+                    <button type="button" wire:click="saveBranchPayrollSettings" class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">Simpan tarif cabang</button>
+                @endif
             </article>
 
+            @if(auth()->user()->role === 'admin_pusat')
             <article class="space-y-4 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
                 <div>
                     <h2 class="font-semibold text-slate-900">Tambah jenis insentif</h2>
@@ -70,6 +98,7 @@
                     <button type="submit" class="rounded-xl border border-indigo-200 px-4 py-2.5 text-sm font-semibold text-indigo-700 hover:bg-indigo-50">Tambah jenis insentif</button>
                 </form>
             </article>
+            @endif
         </section>
 
         <article class="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
@@ -80,6 +109,7 @@
             @if($incentives->isNotEmpty())
                 <div class="divide-y divide-slate-100">
                     @foreach($incentives as $incentive)
+                        @if(auth()->user()->role === 'admin_pusat')
                         <form wire:key="incentive-{{ $incentive->id }}" wire:submit="saveIncentiveType('{{ $incentive->id }}')" class="grid gap-3 p-4 md:grid-cols-[1fr_1fr_1fr_auto_auto] md:items-end">
                             <label class="text-xs font-semibold text-slate-500">Nama insentif
                                 <input type="text" wire:model="incentiveDefinitions.{{ $incentive->id }}.name" maxlength="100" required class="mt-1 w-full rounded-lg border-slate-200 text-sm">
@@ -100,6 +130,14 @@
                                 <span class="rounded-full px-2.5 py-1 font-semibold {{ $incentive->is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500' }}">{{ $incentive->is_active ? 'Aktif' : 'Nonaktif' }}</span>
                             </div>
                         </form>
+                        @else
+                        <div wire:key="incentive-{{ $incentive->id }}" class="grid gap-3 p-4 md:grid-cols-3 md:items-center">
+                            <span class="text-sm font-semibold text-slate-800">{{ $incentive->name }}</span>
+                            <span class="text-sm text-slate-600">{{ $incentive->calculation_type === 'ANNUAL' ? 'Tetap tahunan' : 'Manual saat payroll' }}</span>
+                            <span class="text-sm text-slate-600">Nilai awal: Rp {{ number_format((float) $incentive->default_amount, 0, ',', '.') }}</span>
+                            <span class="text-xs text-slate-500">{{ $incentive->is_active ? 'Aktif' : 'Nonaktif' }}</span>
+                        </div>
+                        @endif
                     @endforeach
                 </div>
             @else
@@ -107,6 +145,7 @@
             @endif
         </article>
 
+        @if(auth()->user()->role === 'keuangan_pusat')
         <article class="space-y-5 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
             <div>
                 <h2 class="font-semibold text-slate-900">Insentif tetap per pegawai dan tahun ajaran</h2>
@@ -153,7 +192,8 @@
                 <p class="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">Tambahkan jenis insentif bertipe tetap tahunan terlebih dahulu.</p>
             @endif
         </article>
-    @elseif(auth()->user()->role === 'admin_pusat')
+        @endif
+    @elseif(in_array(auth()->user()->role, ['admin_pusat', 'keuangan_pusat'], true))
         <div class="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center text-sm text-slate-500">Pilih cabang untuk melihat dan mengatur jenis insentif serta tarif tunjangannya.</div>
     @endif
 </section>

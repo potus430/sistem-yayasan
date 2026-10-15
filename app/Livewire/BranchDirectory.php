@@ -2,13 +2,17 @@
 
 namespace App\Livewire;
 
+use App\Livewire\Concerns\HasDateRangeFilter;
 use App\Models\Branch;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
+use Livewire\WithPagination;
 
 class BranchDirectory extends Component
 {
+    use HasDateRangeFilter, WithPagination;
+
     public bool $showForm = false;
 
     public string $editingId = '';
@@ -41,6 +45,7 @@ class BranchDirectory extends Component
     {
         $this->authorizeManagement();
         $branch = Branch::query()->findOrFail($branchId);
+        abort_if($branch->level === 'YAYASAN', 403, 'Unit Yayasan Pusat dikelola oleh sistem.');
         $this->editingId = $branch->id;
         $this->name = $branch->name;
         $this->level = $branch->level;
@@ -83,6 +88,7 @@ class BranchDirectory extends Component
     {
         $this->authorizeManagement();
         $branch = Branch::query()->findOrFail($branchId);
+        abort_if($branch->level === 'YAYASAN', 403, 'Unit Yayasan Pusat tidak dapat dihapus.');
         $hasData = DB::table('employees')->where('branch_id', $branch->id)->exists()
             || DB::table('students')->where('branch_id', $branch->id)->exists()
             || DB::table('users')->where('branch_id', $branch->id)->exists();
@@ -112,6 +118,7 @@ class BranchDirectory extends Component
     {
         $branches = Branch::query()
             ->withCount(['employees', 'students'])
+            ->tap(fn ($query) => $this->applyDateFilter($query, 'created_at'))
             ->orderBy('name')
             ->paginate(25);
 

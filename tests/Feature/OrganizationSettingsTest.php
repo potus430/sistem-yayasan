@@ -58,8 +58,15 @@ class OrganizationSettingsTest extends TestCase
         $this->actingAs($branchUser)
             ->get(route('dashboard'))
             ->assertOk()
-            ->assertSee('<title>Dashboard · SD Contoh Branding · Yayasan Pendidikan Cendekia</title>', false)
+            ->assertSee('<title>SD Contoh Branding · Yayasan Pendidikan Cendekia</title>', false)
+            ->assertDontSee('<title>Dashboard ·', false)
             ->assertSee('SD Contoh Branding · Yayasan Pendidikan Cendekia');
+
+        $this->actingAs($centralAdmin)
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('<title>Sistem Yayasan Modern · Yayasan Pendidikan Cendekia</title>', false)
+            ->assertDontSee('<title>Dashboard ·', false);
     }
 
     public function test_non_central_user_cannot_manage_organization_identity(): void
@@ -106,11 +113,11 @@ class OrganizationSettingsTest extends TestCase
         Storage::disk('public')->assertExists($firstLogoPath);
         $this->get(route('dashboard'))
             ->assertOk()
-            ->assertSee('alt="Logo Yayasan"', false);
+            ->assertSee('alt="Logo '.OrganizationSetting::current()->foundation_name.'"', false);
         auth()->logout();
         $this->get(route('login'))
             ->assertOk()
-            ->assertSee('alt="Logo Yayasan"', false);
+            ->assertSee('alt="Logo '.OrganizationSetting::current()->foundation_name.'"', false);
         $this->actingAs($admin);
 
         $component->set('logo', TemporaryUploadedFile::fake()->image('replacement-logo.jpg'))

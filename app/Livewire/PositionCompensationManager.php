@@ -38,17 +38,27 @@ class PositionCompensationManager extends Component
 
     public function mount(): void
     {
+        $this->authorizePageAccess();
         $user = auth()->user();
-        $this->branchId = $user->role === 'admin_pusat' ? '' : (string) $user->branch_id;
+        $this->branchId = in_array($user->role, ['admin_pusat', 'keuangan_pusat'], true) ? '' : (string) $user->branch_id;
         $this->academicYearId = (string) (AcademicYear::query()->where('is_active', true)->value('id') ?? '');
-        $this->ensureDefaultPositions();
+        if ($user->role === 'admin_pusat') {
+            $this->ensureDefaultPositions();
+        }
         $this->loadPositionInputs();
+    }
+
+    private function authorizePageAccess(): void
+    {
+        abort_unless(in_array(auth()->user()->role, ['admin_pusat', 'keuangan_pusat', 'admin_cabang', 'keuangan'], true), 403);
     }
 
     public function updatedBranchId(): void
     {
         $this->resetAssignmentForm();
-        $this->ensureDefaultPositions();
+        if (auth()->user()->role === 'admin_pusat') {
+            $this->ensureDefaultPositions();
+        }
         $this->loadPositionInputs();
     }
 
@@ -61,7 +71,9 @@ class PositionCompensationManager extends Component
         }
 
         $this->resetAssignmentForm();
-        $this->ensureDefaultPositions();
+        if (auth()->user()->role === 'admin_pusat') {
+            $this->ensureDefaultPositions();
+        }
         $this->loadPositionInputs();
     }
 
@@ -72,7 +84,7 @@ class PositionCompensationManager extends Component
 
     public function addPosition(): void
     {
-        $this->authorizeCompensationManagement();
+        $this->authorizePositionCreation();
         $branchId = $this->effectiveBranchId();
         abort_unless($branchId, 422, 'Pilih cabang terlebih dahulu.');
         $academicYearId = $this->requireActiveAcademicYearId();
@@ -80,9 +92,6 @@ class PositionCompensationManager extends Component
         $validated = $this->validate([
             'newPositionName' => ['required', 'string', 'max:100'],
             'newPositionRequiresClass' => ['boolean'],
-            'newMonthlySalaryAddition' => ['required', 'numeric', 'min:0', 'max:999999999999.99'],
-            'newMonthlyAllowance' => ['required', 'numeric', 'min:0', 'max:999999999999.99'],
-            'newMonthlyIncentive' => ['required', 'numeric', 'min:0', 'max:999999999999.99'],
         ]);
 
         $name = trim($validated['newPositionName']);
@@ -101,9 +110,9 @@ class PositionCompensationManager extends Component
             'academic_year_id' => $academicYearId,
             'name' => $name,
             'requires_class' => $validated['newPositionRequiresClass'],
-            'monthly_salary_addition' => $validated['newMonthlySalaryAddition'],
-            'monthly_allowance' => $validated['newMonthlyAllowance'],
-            'monthly_incentive' => $validated['newMonthlyIncentive'],
+            'monthly_salary_addition' => 0,
+            'monthly_allowance' => 0,
+            'monthly_incentive' => 0,
         ]);
 
         $this->reset(['newPositionName', 'newPositionRequiresClass']);
@@ -121,45 +130,57 @@ class PositionCompensationManager extends Component
         abort_unless($branchId, 422, 'Pilih cabang terlebih dahulu.');
         $academicYearId = $this->requireActiveAcademicYearId();
 
-        $validated = $this->validate([
-            "positionInputs.{$positionId}.name" => ['required', 'string', 'max:100'],
-            "positionInputs.{$positionId}.requires_class" => ['boolean'],
-            "positionInputs.{$positionId}.monthly_salary_addition" => ['required', 'numeric', 'min:0', 'max:999999999999.99'],
-            "positionInputs.{$positionId}.monthly_allowance" => ['required', 'numeric', 'min:0', 'max:999999999999.99'],
-            "positionInputs.{$positionId}.monthly_incentive" => ['required', 'numeric', 'min:0', 'max:999999999999.99'],
-        ]);
-        $values = $validated['positionInputs'][$positionId];
-        $name = trim($values['name']);
-
         $position = BranchPosition::query()
             ->where('branch_id', $branchId)
             ->where('academic_year_id', $academicYearId)
             ->whereKey($positionId)
             ->firstOrFail();
-        if ($position->requires_class !== (bool) $values['requires_class'] && $position->assignments()->exists()) {
-            $this->addError("positionInputs.{$positionId}.requires_class", 'Hapus atau pindahkan penugasan terlebih dahulu sebelum mengubah kebutuhan kelas.');
 
-            return;
+        $isBranchAdmin = auth()->user()->role === 'admin_cabang';
+        $rules = [];
+        if ($isBranchAdmin) {
+            $rules["positionInputs.{$positionId}.name"] = ['required', 'string', 'max:100'];
+            $rules["positionInputs.{$positionId}.requires_class"] = ['boolean'];
+        } else {
+            $rules["positionInputs.{$positionId}.monthly_salary_addition"] = ['required', 'numeric', 'min:0', 'max:999999999999.99'];
+            $rules["positionInputs.{$positionId}.monthly_allowance"] = ['required', 'numeric', 'min:0', 'max:999999999999.99'];
+            $rules["positionInputs.{$positionId}.monthly_incentive"] = ['required', 'numeric', 'min:0', 'max:999999999999.99'];
         }
 
-        if (BranchPosition::query()
-            ->where('branch_id', $branchId)
-            ->where('academic_year_id', $academicYearId)
-            ->where('name', $name)
-            ->where('id', '<>', $positionId)
-            ->exists()) {
-            $this->addError("positionInputs.{$positionId}.name", 'Nama jabatan sudah digunakan pada tahun ajaran ini.');
+        $validated = $this->validate($rules);
+        $values = $validated['positionInputs'][$positionId];
+        $attributes = [];
 
-            return;
+        if ($isBranchAdmin) {
+            $name = trim($values['name']);
+            if ($position->requires_class !== (bool) $values['requires_class'] && $position->assignments()->exists()) {
+                $this->addError("positionInputs.{$positionId}.requires_class", 'Hapus atau pindahkan penugasan terlebih dahulu sebelum mengubah kebutuhan kelas.');
+
+                return;
+            }
+
+            if (BranchPosition::query()
+                ->where('branch_id', $branchId)
+                ->where('academic_year_id', $academicYearId)
+                ->where('name', $name)
+                ->where('id', '<>', $positionId)
+                ->exists()) {
+                $this->addError("positionInputs.{$positionId}.name", 'Nama jabatan sudah digunakan pada tahun ajaran ini.');
+
+                return;
+            }
+
+            $attributes['name'] = $name;
+            $attributes['requires_class'] = $values['requires_class'];
+        } else {
+            $attributes = [
+                'monthly_salary_addition' => $values['monthly_salary_addition'],
+                'monthly_allowance' => $values['monthly_allowance'],
+                'monthly_incentive' => $values['monthly_incentive'],
+            ];
         }
 
-        $position->update([
-            'name' => $name,
-            'requires_class' => $values['requires_class'],
-            'monthly_salary_addition' => $values['monthly_salary_addition'],
-            'monthly_allowance' => $values['monthly_allowance'],
-            'monthly_incentive' => $values['monthly_incentive'],
-        ]);
+        $position->update($attributes);
 
         $this->loadPositionInputs();
         session()->flash('success', 'Pengaturan jabatan berhasil disimpan.');
@@ -167,7 +188,7 @@ class PositionCompensationManager extends Component
 
     public function togglePosition(string $positionId): void
     {
-        $this->authorizeCompensationManagement();
+        $this->authorizePositionManagement();
         $academicYearId = $this->requireActiveAcademicYearId();
         $position = BranchPosition::query()
             ->where('branch_id', $this->effectiveBranchId())
@@ -178,6 +199,26 @@ class PositionCompensationManager extends Component
         session()->flash('success', $position->is_active
             ? 'Jabatan diaktifkan kembali.'
             : 'Jabatan dinonaktifkan; payroll lama tetap menyimpan snapshot kompensasinya.');
+    }
+
+    public function deletePosition(string $positionId): void
+    {
+        $this->authorizePositionManagement();
+        $position = BranchPosition::query()
+            ->where('branch_id', $this->effectiveBranchId())
+            ->where('academic_year_id', $this->requireActiveAcademicYearId())
+            ->whereKey($positionId)
+            ->firstOrFail();
+
+        if ($position->assignments()->exists()) {
+            $this->addError("positionInputs.{$positionId}.delete", 'Jabatan yang sudah memiliki penugasan tidak dapat dihapus. Nonaktifkan jabatan jika tidak lagi digunakan.');
+
+            return;
+        }
+
+        $position->delete();
+        unset($this->positionInputs[$positionId]);
+        session()->flash('success', 'Jabatan berhasil dihapus.');
     }
 
     public function assignPosition(): void
@@ -326,19 +367,29 @@ class PositionCompensationManager extends Component
 
     private function authorizeCompensationManagement(): void
     {
-        abort_unless(in_array(auth()->user()->role, ['admin_pusat', 'keuangan'], true), 403);
+        abort_unless(in_array(auth()->user()->role, ['keuangan_pusat', 'admin_cabang'], true), 403);
+    }
+
+    private function authorizePositionManagement(): void
+    {
+        abort_unless(auth()->user()->role === 'admin_cabang', 403);
+    }
+
+    private function authorizePositionCreation(): void
+    {
+        abort_unless(auth()->user()->role === 'admin_pusat', 403);
     }
 
     private function authorizeAssignmentManagement(): void
     {
-        abort_unless(in_array(auth()->user()->role, ['admin_pusat', 'admin_cabang'], true), 403);
+        abort_unless(auth()->user()->role === 'admin_cabang', 403);
     }
 
     private function effectiveBranchId(): ?string
     {
         $user = auth()->user();
 
-        return $user->role === 'admin_pusat' ? ($this->branchId ?: null) : ($user->branch_id ?: null);
+        return in_array($user->role, ['admin_pusat', 'keuangan_pusat'], true) ? ($this->branchId ?: null) : ($user->branch_id ?: null);
     }
 
     private function requireActiveAcademicYearId(): string
@@ -414,9 +465,10 @@ class PositionCompensationManager extends Component
 
     public function render()
     {
+        $this->authorizePageAccess();
         $user = auth()->user();
         $branchId = $this->effectiveBranchId();
-        $branches = $user->role === 'admin_pusat' ? Branch::query()->orderBy('name')->get() : collect();
+        $branches = in_array($user->role, ['admin_pusat', 'keuangan_pusat'], true) ? Branch::query()->orderBy('name')->get() : collect();
         $academicYears = AcademicYear::query()->where('is_active', true)->orderByDesc('starts_on')->get();
         $activeYearId = $academicYears->first()?->id;
         $positions = $branchId && $activeYearId && $this->academicYearId === $activeYearId

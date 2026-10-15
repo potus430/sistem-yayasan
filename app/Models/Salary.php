@@ -2,18 +2,22 @@
 
 namespace App\Models;
 
+use App\Traits\HasAuditLog;
 use App\Traits\HasUuidV7;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Salary extends Model
 {
-    use HasUuidV7;
+    use HasAuditLog, HasUuidV7;
 
     protected $fillable = [
         'employee_id',
         'branch_id',
         'period',
+        'base_salary',
+        'teaching_hours',
+        'hourly_rate',
         'incentives',
         'incentive_details',
         'position_salary',
@@ -29,6 +33,9 @@ class Salary extends Model
     {
         return [
             'incentives' => 'decimal:2',
+            'base_salary' => 'decimal:2',
+            'teaching_hours' => 'integer',
+            'hourly_rate' => 'decimal:2',
             'incentive_details' => 'array',
             'position_salary' => 'decimal:2',
             'position_details' => 'array',

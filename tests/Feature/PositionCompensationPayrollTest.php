@@ -5,12 +5,15 @@ namespace Tests\Feature;
 use App\Livewire\PayrollManager;
 use App\Livewire\PositionCompensationManager;
 use App\Models\AcademicYear;
+use App\Models\AuditLog;
 use App\Models\Branch;
 use App\Models\BranchPosition;
 use App\Models\Employee;
 use App\Models\EmployeePositionAssignment;
+use App\Models\RosterSlot;
 use App\Models\Salary;
 use App\Models\SchoolClass;
+use App\Models\TeacherHourlyRate;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Str;
@@ -20,6 +23,183 @@ use Tests\TestCase;
 class PositionCompensationPayrollTest extends TestCase
 {
     use DatabaseTransactions;
+
+    public function test_central_finance_manages_compensation_while_branch_admin_manages_existing_position_names(): void
+    {
+        $branch = Branch::query()->create([
+            'name' => 'Central Position Review '.Str::uuid(),
+            'level' => 'SD',
+            'address' => 'Test address',
+        ]);
+        $admin = User::query()->create([
+            'name' => 'Central Position Admin',
+            'email' => Str::uuid().'@example.test',
+            'password' => 'test-password',
+            'branch_id' => null,
+            'role' => 'admin_pusat',
+            'is_active' => true,
+        ]);
+        $centralFinance = User::query()->create([
+            'name' => 'Central Position Finance',
+            'email' => Str::uuid().'@example.test',
+            'password' => 'test-password',
+            'branch_id' => null,
+            'role' => 'keuangan_pusat',
+            'is_active' => true,
+        ]);
+        $academicYear = AcademicYear::query()->where('is_active', true)->firstOrFail();
+        $employee = Employee::query()->create([
+            'branch_id' => $branch->id,
+            'nip' => Str::random(15),
+            'name' => 'Assigned Branch Employee',
+            'type' => 'GURU',
+            'base_salary' => 600000,
+            'status' => 'TETAP',
+        ]);
+        $position = BranchPosition::query()->create([
+            'branch_id' => $branch->id,
+            'academic_year_id' => $academicYear->id,
+            'name' => 'Kepala Sekolah',
+            'requires_class' => false,
+            'monthly_salary_addition' => 100000,
+            'monthly_allowance' => 50000,
+            'monthly_incentive' => 25000,
+            'is_active' => true,
+        ]);
+        $assignment = EmployeePositionAssignment::query()->create([
+            'branch_id' => $branch->id,
+            'academic_year_id' => $academicYear->id,
+            'employee_id' => $employee->id,
+            'branch_position_id' => $position->id,
+        ]);
+
+        $component = Livewire::actingAs($admin)
+            ->test(PositionCompensationManager::class)
+            ->set('branchId', $branch->id)
+            ->set('academicYearId', $academicYear->id)
+            ->assertSee('Kepala Sekolah')
+            ->assertSee('Lihat saja')
+            ->assertSee('Tambah jabatan dinamis');
+
+        $component
+            ->set("positionInputs.{$position->id}.name", 'Unauthorized Renamed Position')
+            ->set("positionInputs.{$position->id}.monthly_salary_addition", '200000')
+            ->set("positionInputs.{$position->id}.monthly_allowance", '75000')
+            ->set("positionInputs.{$position->id}.monthly_incentive", '50000')
+            ->call('savePosition', $position->id)
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('branch_positions', [
+            'id' => $position->id,
+            'name' => 'Kepala Sekolah',
+            'requires_class' => false,
+            'monthly_salary_addition' => 100000,
+            'monthly_allowance' => 50000,
+            'monthly_incentive' => 25000,
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(PositionCompensationManager::class)
+            ->set('branchId', $branch->id)
+            ->set('academicYearId', $academicYear->id)
+            ->set('newPositionName', 'Koordinator Kurikulum')
+            ->set('newPositionRequiresClass', false)
+            ->call('addPosition')
+            ->assertHasNoErrors();
+
+        Livewire::actingAs($centralFinance)
+            ->test(PositionCompensationManager::class)
+            ->set('branchId', $branch->id)
+            ->set('academicYearId', $academicYear->id)
+            ->set("positionInputs.{$position->id}.monthly_salary_addition", '200000')
+            ->set("positionInputs.{$position->id}.monthly_allowance", '75000')
+            ->set("positionInputs.{$position->id}.monthly_incentive", '50000')
+            ->call('savePosition', $position->id)
+            ->assertHasNoErrors();
+        Livewire::actingAs($centralFinance)
+            ->test(PositionCompensationManager::class)
+            ->set('branchId', $branch->id)
+            ->set('academicYearId', $academicYear->id)
+            ->set('newPositionName', 'Koordinator Kurikulum')
+            ->set('newPositionRequiresClass', false)
+            ->call('addPosition')
+            ->assertForbidden();
+        $newPosition = BranchPosition::query()
+            ->where('branch_id', $branch->id)
+            ->where('academic_year_id', $academicYear->id)
+            ->where('name', 'Koordinator Kurikulum')
+            ->firstOrFail();
+        $this->assertSame('0.00', $newPosition->monthly_salary_addition);
+        Livewire::actingAs($admin)
+            ->test(PositionCompensationManager::class)
+            ->set('branchId', $branch->id)
+            ->call('togglePosition', $position->id)
+            ->assertForbidden();
+        Livewire::actingAs($admin)
+            ->test(PositionCompensationManager::class)
+            ->set('branchId', $branch->id)
+            ->call('deletePosition', $position->id)
+            ->assertForbidden();
+        Livewire::actingAs($admin)
+            ->test(PositionCompensationManager::class)
+            ->set('branchId', $branch->id)
+            ->call('assignPosition')
+            ->assertForbidden();
+        Livewire::actingAs($admin)
+            ->test(PositionCompensationManager::class)
+            ->set('branchId', $branch->id)
+            ->call('removeAssignment', $assignment->id)
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('employee_position_assignments', ['id' => $assignment->id]);
+
+        $branchAdmin = User::query()->create([
+            'name' => 'Branch Position Admin',
+            'email' => Str::uuid().'@example.test',
+            'password' => 'test-password',
+            'branch_id' => $branch->id,
+            'role' => 'admin_cabang',
+            'is_active' => true,
+        ]);
+        Livewire::actingAs($branchAdmin)
+            ->test(PositionCompensationManager::class)
+            ->set('newPositionName', 'Unauthorized Dynamic Position')
+            ->set('newPositionRequiresClass', false)
+            ->call('addPosition')
+            ->assertForbidden();
+        $this->assertDatabaseMissing('branch_positions', [
+            'branch_id' => $branch->id,
+            'academic_year_id' => $academicYear->id,
+            'name' => 'Unauthorized Dynamic Position',
+        ]);
+        Livewire::actingAs($branchAdmin)
+            ->test(PositionCompensationManager::class)
+            ->set("positionInputs.{$position->id}.name", 'Koordinator Operasional')
+            ->set("positionInputs.{$position->id}.requires_class", false)
+            ->set("positionInputs.{$position->id}.monthly_salary_addition", '999999')
+            ->set("positionInputs.{$position->id}.monthly_allowance", '999999')
+            ->set("positionInputs.{$position->id}.monthly_incentive", '999999')
+            ->call('savePosition', $position->id)
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseHas('branch_positions', [
+            'id' => $position->id,
+            'name' => 'Koordinator Operasional',
+            'monthly_salary_addition' => 200000,
+            'monthly_allowance' => 75000,
+            'monthly_incentive' => 50000,
+        ]);
+        Livewire::actingAs($branchAdmin)
+            ->test(PositionCompensationManager::class)
+            ->call('deletePosition', $position->id)
+            ->assertHasErrors(["positionInputs.{$position->id}.delete"]);
+
+        Livewire::actingAs($branchAdmin)
+            ->test(PositionCompensationManager::class)
+            ->call('deletePosition', $newPosition->id)
+            ->assertHasNoErrors();
+        $this->assertDatabaseMissing('branch_positions', ['id' => $newPosition->id]);
+    }
 
     public function test_assignment_and_position_compensation_are_snapshotted_in_payroll(): void
     {
@@ -37,6 +217,14 @@ class PositionCompensationPayrollTest extends TestCase
             'role' => 'admin_cabang',
             'is_active' => true,
         ]);
+        $centralFinance = User::query()->create([
+            'name' => 'Payroll Central Finance',
+            'email' => Str::uuid().'@example.test',
+            'password' => 'test-password',
+            'branch_id' => null,
+            'role' => 'keuangan_pusat',
+            'is_active' => true,
+        ]);
         $employee = Employee::query()->create([
             'branch_id' => $branch->id,
             'nip' => Str::random(15),
@@ -47,9 +235,24 @@ class PositionCompensationPayrollTest extends TestCase
         ]);
         $academicYear = AcademicYear::query()->create([
             'name' => '2099/2100-'.Str::random(4),
-            'starts_on' => '2099-07-01',
-            'ends_on' => '2100-06-30',
+            'starts_on' => '2026-07-01',
+            'ends_on' => '2027-06-30',
             'is_active' => true,
+        ]);
+        TeacherHourlyRate::query()->create([
+            'branch_id' => $branch->id,
+            'academic_year_id' => $academicYear->id,
+            'amount' => 150000,
+        ]);
+        RosterSlot::query()->create([
+            'branch_id' => $branch->id,
+            'academic_year_id' => $academicYear->id,
+            'employee_id' => $employee->id,
+            'subject' => 'Matematika',
+            'class_name' => '10 IPA',
+            'room' => 'Ruang 1',
+            'weekday' => 1,
+            'period' => 1,
         ]);
         SchoolClass::query()->create(['branch_id' => $branch->id, 'name' => '10 IPA']);
         SchoolClass::query()->create(['branch_id' => $branch->id, 'name' => '11 IPA']);
@@ -80,8 +283,9 @@ class PositionCompensationPayrollTest extends TestCase
             'class_name' => null,
         ]);
 
-        Livewire::actingAs($user)
+        Livewire::actingAs($centralFinance)
             ->test(PayrollManager::class)
+            ->set('branchId', $branch->id)
             ->set('employeeId', $employee->id)
             ->set('period', '2026-10')
             ->set('academicYearId', $academicYear->id)
@@ -339,6 +543,12 @@ class PositionCompensationPayrollTest extends TestCase
             'branch_position_id' => $positionId,
             'employee_id' => $employee->id,
         ]);
+        $this->assertSame('Integrasi API', AuditLog::query()
+            ->where('auditable_type', BranchPosition::class)
+            ->where('auditable_id', $positionId)
+            ->where('event', 'created')
+            ->sole()
+            ->actor_name);
         $this->assertSame('100000.00', Salary::query()->findOrFail($salaryId)->position_salary);
     }
 }

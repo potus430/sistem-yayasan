@@ -15,14 +15,16 @@ class PayrollSlipPdfController
     public function __invoke(Request $request): Response
     {
         $user = $request->user();
-        abort_unless(in_array($user->role, ['admin_pusat', 'keuangan'], true), 403);
+        abort_unless(in_array($user->role, ['keuangan_pusat', 'keuangan'], true), 403);
 
         $validated = $request->validate([
             'period' => ['required', 'date_format:Y-m'],
             'branch_id' => ['nullable', 'uuid', 'exists:branches,id'],
             'employee_id' => ['nullable', 'uuid', 'exists:employees,id'],
+            'per_page' => ['nullable', 'integer', 'in:1,2,4'],
         ]);
-        $branchId = $user->role === 'admin_pusat'
+        $perPage = (int) ($validated['per_page'] ?? 2);
+        $branchId = in_array($user->role, ['admin_pusat', 'keuangan_pusat'], true)
             ? ($validated['branch_id'] ?? null)
             : ($user->branch_id ?: null);
 
@@ -44,7 +46,9 @@ class PayrollSlipPdfController
             ]);
         }
 
-        $salaryPages = $salaries->chunk(2);
+        $salaryPages = $salaries
+            ->chunk($perPage)
+            ->map(fn ($page) => $page->chunk(2));
         $organizationSettings = OrganizationSetting::current();
         $logoDataUri = null;
         if ($organizationSettings->logo_path !== null) {
@@ -62,6 +66,7 @@ class PayrollSlipPdfController
             'period' => $validated['period'],
             'generatedAt' => now(),
             'salaryCount' => $salaries->count(),
+            'perPage' => $perPage,
             'organizationSettings' => $organizationSettings,
             'organizationLogoDataUri' => $logoDataUri,
         ])->setPaper('a4', 'portrait')->setOptions([
@@ -73,10 +78,10 @@ class PayrollSlipPdfController
         $branchName = $branchId ? $salaries->first()?->employee?->branch?->name : null;
         $branchSuffix = $branchName ? '-'.str($branchName)->slug() : '-semua-cabang';
         $employeeSuffix = isset($validated['employee_id']) ? '-pegawai' : '';
-        $filename = "slip-gaji-{$validated['period']}{$branchSuffix}{$employeeSuffix}.pdf";
+        $filename = "slip-gaji-{$validated['period']}{$branchSuffix}{$employeeSuffix}";
 
         return isset($validated['employee_id'])
-            ? $pdf->stream($filename)
-            : $pdf->download("slip-gaji-{$validated['period']}{$branchSuffix}.pdf");
+            ? $pdf->stream($filename.'.pdf')
+            : $pdf->download($filename.'.pdf');
     }
 }

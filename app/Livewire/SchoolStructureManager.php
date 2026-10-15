@@ -3,9 +3,12 @@
 namespace App\Livewire;
 
 use App\Models\Branch;
+use App\Models\RosterSlot;
 use App\Models\SchoolClass;
 use App\Models\SchoolRoom;
 use App\Models\SchoolSubject;
+use App\Models\SppClassFee;
+use App\Models\Student;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -25,7 +28,7 @@ class SchoolStructureManager extends Component
 
     public function mount(): void
     {
-        $this->authorizeManagement();
+        $this->authorizeViewing();
         if (auth()->user()->role !== 'admin_pusat') {
             $this->branchId = (string) auth()->user()->branch_id;
         }
@@ -97,24 +100,24 @@ class SchoolStructureManager extends Component
 
             if ($this->editingId && $oldName !== $newName) {
                 if ($this->kind === 'class') {
-                    DB::table('students')->where('branch_id', $branchId)->where('current_class', $oldName)->update([
-                        'current_class' => $newName,
-                        'updated_at' => now(),
-                    ]);
-                    DB::table('roster_slots')->where('branch_id', $branchId)->where('class_name', $oldName)->update([
-                        'class_name' => $newName,
-                        'updated_at' => now(),
-                    ]);
+                    Student::query()
+                        ->where('branch_id', $branchId)
+                        ->where('current_class', $oldName)
+                        ->each(fn (Student $student) => $student->update(['current_class' => $newName]));
+                    RosterSlot::query()
+                        ->where('branch_id', $branchId)
+                        ->where('class_name', $oldName)
+                        ->each(fn (RosterSlot $slot) => $slot->update(['class_name' => $newName]));
                 } elseif ($this->kind === 'room') {
-                    DB::table('roster_slots')->where('branch_id', $branchId)->where('room', $oldName)->update([
-                        'room' => $newName,
-                        'updated_at' => now(),
-                    ]);
+                    RosterSlot::query()
+                        ->where('branch_id', $branchId)
+                        ->where('room', $oldName)
+                        ->each(fn (RosterSlot $slot) => $slot->update(['room' => $newName]));
                 } else {
-                    DB::table('roster_slots')->where('branch_id', $branchId)->where('subject', $oldName)->update([
-                        'subject' => $newName,
-                        'updated_at' => now(),
-                    ]);
+                    RosterSlot::query()
+                        ->where('branch_id', $branchId)
+                        ->where('subject', $oldName)
+                        ->each(fn (RosterSlot $slot) => $slot->update(['subject' => $newName]));
                 }
             }
         });
@@ -134,7 +137,8 @@ class SchoolStructureManager extends Component
         $this->validateKind($kind);
         $record = $this->queryFor($kind)->findOrFail($id);
         $isInUse = match ($kind) {
-            'class' => DB::table('students')->where('branch_id', $record->branch_id)->where('current_class', $record->name)->exists()
+            'class' => SppClassFee::query()->where('school_class_id', $record->id)->exists()
+                || DB::table('students')->where('branch_id', $record->branch_id)->where('current_class', $record->name)->exists()
                 || DB::table('roster_slots')->where('branch_id', $record->branch_id)->where('class_name', $record->name)->exists(),
             'room' => DB::table('roster_slots')->where('branch_id', $record->branch_id)->where('room', $record->name)->exists(),
             'subject' => DB::table('roster_slots')->where('branch_id', $record->branch_id)->where('subject', $record->name)->exists(),
@@ -169,7 +173,7 @@ class SchoolStructureManager extends Component
         );
     }
 
-    private function modelFor(string $kind): SchoolClass|SchoolRoom
+    private function modelFor(string $kind): SchoolClass|SchoolRoom|SchoolSubject
     {
         return match ($kind) {
             'class' => new SchoolClass,
@@ -185,14 +189,20 @@ class SchoolStructureManager extends Component
 
     private function authorizeManagement(): void
     {
+        abort_unless(auth()->user()->role === 'admin_cabang', 403);
+    }
+
+    private function authorizeViewing(): void
+    {
         abort_unless(in_array(auth()->user()->role, ['admin_pusat', 'admin_cabang'], true), 403);
     }
 
     public function render()
     {
+        $this->authorizeViewing();
         $user = auth()->user();
         $branchId = $user->role === 'admin_pusat' ? $this->branchId : $user->branch_id;
-        $branches = $user->role === 'admin_pusat' ? Branch::query()->orderBy('name')->get(['id', 'name', 'level']) : collect();
+        $branches = $user->role === 'admin_pusat' ? Branch::query()->whereIn('level', ['TK', 'SD', 'SMP', 'SMA'])->orderBy('name')->get(['id', 'name', 'level']) : collect();
         $classes = $branchId ? SchoolClass::query()->where('branch_id', $branchId)->orderBy('name')->get() : collect();
         $rooms = $branchId ? SchoolRoom::query()->where('branch_id', $branchId)->orderBy('name')->get() : collect();
         $subjects = $branchId ? SchoolSubject::query()->where('branch_id', $branchId)->orderBy('name')->get() : collect();

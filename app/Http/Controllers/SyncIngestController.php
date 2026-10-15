@@ -2,6 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AnnualIncentiveAssignment;
+use App\Models\Attendance;
+use App\Models\BranchIncentive;
+use App\Models\BranchPosition;
+use App\Models\EmployeePositionAssignment;
+use App\Models\Salary;
+use App\Models\SppBilling;
+use App\Models\SppPayment;
+use App\Models\Student;
+use App\Models\TeacherSubstitution;
+use App\Services\AuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -40,7 +51,7 @@ class SyncIngestController
             'required' => ['id', 'spp_billing_id', 'branch_id', 'amount', 'payment_method', 'paid_at', 'created_at', 'updated_at'],
         ],
         'salaries' => [
-            'columns' => ['id', 'employee_id', 'branch_id', 'period', 'incentives', 'incentive_details', 'position_salary', 'position_details', 'allowances', 'allowance_details', 'deductions', 'net_salary', 'status', 'created_at', 'updated_at', 'synced_at'],
+            'columns' => ['id', 'employee_id', 'branch_id', 'period', 'base_salary', 'teaching_hours', 'hourly_rate', 'incentives', 'incentive_details', 'position_salary', 'position_details', 'allowances', 'allowance_details', 'deductions', 'net_salary', 'status', 'created_at', 'updated_at', 'synced_at'],
             'required' => ['id', 'employee_id', 'branch_id', 'period', 'incentives', 'allowances', 'deductions', 'net_salary', 'status', 'created_at', 'updated_at'],
         ],
         'attendances' => [
@@ -51,6 +62,19 @@ class SyncIngestController
             'columns' => ['id', 'branch_id', 'roster_slot_id', 'absent_employee_id', 'substitute_employee_id', 'date', 'period', 'is_cancelled', 'created_at', 'updated_at', 'synced_at'],
             'required' => ['id', 'branch_id', 'roster_slot_id', 'absent_employee_id', 'substitute_employee_id', 'date', 'period', 'is_cancelled', 'created_at', 'updated_at'],
         ],
+    ];
+
+    private const AUDITABLE_TYPES = [
+        'branch_incentives' => BranchIncentive::class,
+        'annual_incentive_assignments' => AnnualIncentiveAssignment::class,
+        'branch_positions' => BranchPosition::class,
+        'employee_position_assignments' => EmployeePositionAssignment::class,
+        'students' => Student::class,
+        'spp_billings' => SppBilling::class,
+        'spp_payments' => SppPayment::class,
+        'salaries' => Salary::class,
+        'attendances' => Attendance::class,
+        'teacher_substitutions' => TeacherSubstitution::class,
     ];
 
     public function __invoke(Request $request, string $entity): JsonResponse
@@ -79,6 +103,11 @@ class SyncIngestController
 
         if (in_array($entity, ['annual_incentive_assignments', 'employee_position_assignments', 'salaries', 'attendances'], true)) {
             $rules['records.*.employee_id'][] = 'required|uuid';
+        }
+        if ($entity === 'salaries') {
+            $rules['records.*.base_salary'][] = 'nullable|numeric|min:0|max:999999999999.99';
+            $rules['records.*.teaching_hours'][] = 'nullable|integer|min:0|max:65535';
+            $rules['records.*.hourly_rate'][] = 'nullable|numeric|min:0|max:999999999999.99';
         }
         if (in_array($entity, ['branch_positions', 'employee_position_assignments'], true)) {
             $rules['records.*.academic_year_id'][] = 'required|uuid';
@@ -187,12 +216,20 @@ class SyncIngestController
         }
 
         $validated = Validator::make($request->all(), $rules)->validate();
-        $rows = array_map(function (array $record) use ($definition, $entity): array {
+        $employeeBaseSalaries = $entity === 'salaries'
+            ? DB::table('employees')
+                ->whereIn('id', collect($validated['records'])->pluck('employee_id')->unique())
+                ->pluck('base_salary', 'id')
+            : collect();
+        $rows = array_map(function (array $record) use ($definition, $entity, $employeeBaseSalaries): array {
             $row = array_replace(
                 array_fill_keys($definition['columns'], null),
                 array_intersect_key($record, array_flip($definition['columns']))
             );
             if ($entity === 'salaries') {
+                $row['base_salary'] ??= $employeeBaseSalaries[$record['employee_id']] ?? 0;
+                $row['teaching_hours'] ??= 0;
+                $row['hourly_rate'] ??= 0;
                 foreach (['incentive_details', 'allowance_details', 'position_details'] as $jsonColumn) {
                     if (isset($row[$jsonColumn])) {
                         $row[$jsonColumn] = json_encode($row[$jsonColumn], JSON_THROW_ON_ERROR);
@@ -203,8 +240,58 @@ class SyncIngestController
             return $row;
         }, $validated['records']);
         $updates = array_values(array_diff($definition['columns'], ['id', 'created_at', 'synced_at']));
+        DB::transaction(function () use ($entity, $definition, $rows, $updates): void {
+            $ids = array_column($rows, 'id');
+            $oldRecords = DB::table($entity)->whereIn('id', $ids)->get()->keyBy('id');
 
-        DB::table($entity)->upsert($rows, ['id'], $updates);
+            DB::table($entity)->upsert($rows, ['id'], $updates);
+
+            $newRecords = DB::table($entity)->whereIn('id', $ids)->get()->keyBy('id');
+            $auditEntries = [];
+
+            foreach ($rows as $row) {
+                $oldRecord = $oldRecords->get($row['id']);
+                $newRecord = $newRecords->get($row['id']);
+                if ($newRecord === null) {
+                    continue;
+                }
+
+                $oldValues = [];
+                $newValues = [];
+                $columns = array_diff($definition['columns'], ['id', 'created_at', 'updated_at', 'synced_at']);
+
+                if ($oldRecord === null) {
+                    $newValues = array_intersect_key($row, array_flip($columns));
+                    $event = 'created';
+                } else {
+                    foreach ($columns as $column) {
+                        $oldValue = $oldRecord->{$column};
+                        $newValue = $newRecord->{$column};
+                        if ($oldValue != $newValue) {
+                            $oldValues[$column] = $oldValue;
+                            $newValues[$column] = $newValue;
+                        }
+                    }
+
+                    if ($newValues === []) {
+                        continue;
+                    }
+
+                    $event = 'updated';
+                }
+
+                $auditEntries[] = [
+                    'event' => $event,
+                    'auditable_type' => self::AUDITABLE_TYPES[$entity],
+                    'auditable_id' => (string) $row['id'],
+                    'branch_id' => (string) $row['branch_id'],
+                    'old_values' => $oldValues,
+                    'new_values' => $newValues,
+                ];
+            }
+
+            app(AuditLogger::class)->recordMany($auditEntries);
+        });
 
         return response()->json(['accepted' => count($rows)]);
     }

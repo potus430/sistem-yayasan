@@ -121,7 +121,7 @@
 
         <div class="overflow-hidden rounded-xl bg-white shadow-sm">
             <div class="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-                <div><h2 class="font-semibold">Roster · {{ $academicYears->firstWhere('id', $academicYearId)?->name }}</h2><p class="mt-1 text-sm text-slate-500">{{ number_format($rosterCount) }} slot jadwal</p></div>
+                <div><h2 class="font-semibold">Roster · {{ $academicYears->firstWhere('id', $academicYearId)?->name }}</h2><p class="mt-1 text-sm text-slate-500">{{ number_format($rosterCount) }} slot jadwal</p><div class="mt-2 flex gap-3"><a href="{{ route('reports.download', ['report' => 'roster', 'branch_id' => auth()->user()->role === 'admin_pusat' ? $branchId : null, 'academic_year_id' => $academicYearId, 'format' => 'pdf']) }}" class="text-xs font-semibold text-rose-700 hover:underline">Ekspor PDF</a><a href="{{ route('reports.download', ['report' => 'roster', 'branch_id' => auth()->user()->role === 'admin_pusat' ? $branchId : null, 'academic_year_id' => $academicYearId, 'format' => 'xlsx']) }}" class="text-xs font-semibold text-emerald-700 hover:underline">Ekspor Excel</a></div></div>
                 <label class="flex items-center gap-2 text-sm font-medium text-slate-600">Baris per halaman
                     <select wire:model.live="perPage" aria-label="Jumlah roster per halaman" class="rounded-lg border-slate-200 py-2 text-sm">
                         <option value="10">10</option><option value="25">25</option><option value="50">50</option><option value="100">100</option>
