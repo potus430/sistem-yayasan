@@ -2,7 +2,7 @@
     <div>
         <p class="text-sm font-semibold uppercase tracking-wider text-indigo-600">Pengaturan yayasan</p>
         <h1 class="mt-1 text-2xl font-bold text-slate-900">Identitas aplikasi</h1>
-        <p class="mt-2 text-sm text-slate-500">Atur nama aplikasi serta nama dan alamat yayasan yang tampil pada halaman dan dokumen.</p>
+        <p class="mt-2 text-sm text-slate-500">Atur identitas yayasan dan konten panel kiri halaman login tanpa mengubah kode aplikasi.</p>
     </div>
 
     @if(session('success'))
@@ -47,6 +47,50 @@
                 @if($settings->logo_path)
                     <button type="button" wire:click="removeLogo" wire:confirm="Hapus logo yayasan?" class="rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50">Hapus logo</button>
                 @endif
+            </div>
+        </div>
+
+        <div class="space-y-4 rounded-2xl border border-indigo-100 bg-indigo-50/30 p-4 sm:p-5">
+            <div>
+                <h2 class="text-base font-bold text-slate-900">Panel kiri halaman login</h2>
+                <p class="mt-1 text-xs text-slate-500">Konten ini langsung tampil di halaman login. Unggah gambar opsional untuk latar belakang panel.</p>
+            </div>
+            <label class="block text-sm font-semibold text-slate-700">Label kecil
+                <input type="text" wire:model="loginPanelBadge" required maxlength="100" class="mt-1.5 w-full rounded-xl border-slate-200 bg-white" placeholder="Contoh: Administrasi terpadu">
+                @error('loginPanelBadge')<span class="mt-1 block text-xs font-normal text-rose-600">{{ $message }}</span>@enderror
+            </label>
+            <label class="block text-sm font-semibold text-slate-700">Judul utama
+                <input type="text" wire:model="loginPanelHeadline" required maxlength="180" class="mt-1.5 w-full rounded-xl border-slate-200 bg-white" placeholder="Judul sambutan halaman login">
+                @error('loginPanelHeadline')<span class="mt-1 block text-xs font-normal text-rose-600">{{ $message }}</span>@enderror
+            </label>
+            <label class="block text-sm font-semibold text-slate-700">Deskripsi
+                <textarea wire:model="loginPanelDescription" required rows="3" maxlength="1000" class="mt-1.5 w-full rounded-xl border-slate-200 bg-white" placeholder="Jelaskan singkat layanan aplikasi"></textarea>
+                @error('loginPanelDescription')<span class="mt-1 block text-xs font-normal text-rose-600">{{ $message }}</span>@enderror
+            </label>
+            <div class="space-y-3 rounded-xl border border-white bg-white p-4">
+                <div>
+                    <label for="login-panel-image" class="block text-sm font-semibold text-slate-700">Gambar latar panel</label>
+                    <p class="mt-1 text-xs text-slate-500">JPG, PNG, atau WebP. Maksimal 5 MB. Overlay gelap menjaga teks tetap terbaca.</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-4">
+                    @if($loginPanelImage)
+                        <img src="{{ $loginPanelImage->temporaryUrl() }}" alt="Pratinjau gambar panel login" class="h-24 w-36 rounded-xl border border-slate-200 object-cover">
+                    @elseif($settings->login_panel_image_path)
+                        <img src="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($settings->login_panel_image_path) }}" alt="Gambar panel login" class="h-24 w-36 rounded-xl border border-slate-200 object-cover">
+                    @else
+                        <div class="flex h-24 w-36 items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 text-xs text-slate-400">Gradien bawaan</div>
+                    @endif
+                    <input id="login-panel-image" type="file" wire:model="loginPanelImage" accept="image/png,image/jpeg,image/webp" class="min-w-0 flex-1 text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-indigo-700 hover:file:bg-indigo-100">
+                    @if($settings->login_panel_image_path)
+                        <button type="button" wire:click="removeLoginPanelImage" wire:confirm="Hapus gambar latar panel login?" class="rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50">Hapus gambar</button>
+                    @endif
+                </div>
+                @error('loginPanelImage')<span class="block text-xs text-rose-600">{{ $message }}</span>@enderror
+            </div>
+            <div class="overflow-hidden rounded-xl bg-slate-950 p-5 text-white">
+                <span class="inline-flex rounded-full border border-indigo-300/20 bg-indigo-400/10 px-3 py-1 text-xs font-semibold text-indigo-100">{{ $loginPanelBadge ?: 'Label panel' }}</span>
+                <p class="mt-3 text-xl font-bold">{{ $loginPanelHeadline ?: 'Judul panel login' }}</p>
+                <p class="mt-2 text-sm text-slate-300">{{ $loginPanelDescription ?: 'Deskripsi panel login' }}</p>
             </div>
         </div>
 

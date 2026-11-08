@@ -6,11 +6,14 @@ use App\Livewire\Concerns\HasDateRangeFilter;
 use App\Models\Branch;
 use App\Models\SchoolClass;
 use App\Models\Student;
+use App\Models\StudentDocument;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
 use Livewire\WithPagination;
+use RuntimeException;
 
 class StudentDirectory extends Component
 {
@@ -25,6 +28,8 @@ class StudentDirectory extends Component
     public int $perPage = 25;
 
     public bool $showForm = false;
+
+    public ?string $selectedStudentId = null;
 
     public string $editingId = '';
 
@@ -71,6 +76,18 @@ class StudentDirectory extends Component
         $user = auth()->user();
         $this->formBranchId = $user->role === 'admin_pusat' ? $this->branchId : $user->branch_id;
         $this->showForm = true;
+    }
+
+    public function showDetails(string $studentId): void
+    {
+        $this->authorizeViewing();
+        $this->scopedStudents()->findOrFail($studentId);
+        $this->selectedStudentId = $studentId;
+    }
+
+    public function closeDetails(): void
+    {
+        $this->selectedStudentId = null;
     }
 
     public function editStudent(string $studentId): void
@@ -137,6 +154,13 @@ class StudentDirectory extends Component
             return;
         }
 
+        StudentDocument::query()->where('student_id', $student->id)->each(function (StudentDocument $document): void {
+            $disk = Storage::disk($document->disk);
+            if ($disk->exists($document->path) && ! $disk->delete($document->path)) {
+                throw new RuntimeException('Dokumen siswa gagal dihapus dari penyimpanan privat.');
+            }
+            $document->delete();
+        });
         $student->delete();
         session()->flash('success', 'Data siswa berhasil dihapus.');
     }
@@ -192,11 +216,24 @@ class StudentDirectory extends Component
             ? SchoolClass::query()->where('branch_id', $this->formBranchId)->orderBy('name')->pluck('name')
             : collect();
         $students = $query->orderBy('branch_id')->orderBy('current_class')->orderBy('name')->paginate($this->perPage);
+        $studentIds = $students->getCollection()->pluck('id');
+        $photos = StudentDocument::query()
+            ->whereIn('student_id', $studentIds)
+            ->where('type', 'PAS_PHOTO')
+            ->latest('created_at')
+            ->get()
+            ->filter(fn (StudentDocument $document): bool => in_array($document->mime_type, ['image/jpeg', 'image/png', 'image/webp'], true)
+                && Storage::disk($document->disk)->exists($document->path))
+            ->unique('student_id')
+            ->keyBy('student_id');
         $branches = $user->role === 'admin_pusat'
             ? Branch::query()->whereIn('level', ['TK', 'SD', 'SMP', 'SMA'])->orderBy('name')->get(['id', 'name', 'level'])
             : collect();
+        $selectedStudent = $this->selectedStudentId
+            ? $this->scopedStudents()->with(['branch', 'admissionAcademicYear', 'documents'])->findOrFail($this->selectedStudentId)
+            : null;
 
-        return view('livewire.student-directory', compact('branches', 'classes', 'formClasses', 'students', 'totalStudents'))
+        return view('livewire.student-directory', compact('branches', 'classes', 'formClasses', 'photos', 'selectedStudent', 'students', 'totalStudents'))
             ->layout('layouts.app', ['title' => 'Data siswa']);
     }
 }

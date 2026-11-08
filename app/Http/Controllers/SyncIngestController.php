@@ -6,8 +6,10 @@ use App\Models\AnnualIncentiveAssignment;
 use App\Models\Attendance;
 use App\Models\BranchIncentive;
 use App\Models\BranchPosition;
+use App\Models\ClassCapacity;
 use App\Models\EmployeePositionAssignment;
 use App\Models\Salary;
+use App\Models\SchoolClass;
 use App\Models\SppBilling;
 use App\Models\SppPayment;
 use App\Models\Student;
@@ -38,8 +40,16 @@ class SyncIngestController
             'columns' => ['id', 'branch_id', 'academic_year_id', 'employee_id', 'branch_position_id', 'class_name', 'created_at', 'updated_at', 'synced_at'],
             'required' => ['id', 'branch_id', 'academic_year_id', 'employee_id', 'branch_position_id', 'created_at', 'updated_at'],
         ],
+        'school_classes' => [
+            'columns' => ['id', 'branch_id', 'name', 'created_at', 'updated_at', 'synced_at'],
+            'required' => ['id', 'branch_id', 'name', 'created_at', 'updated_at'],
+        ],
+        'class_capacities' => [
+            'columns' => ['id', 'branch_id', 'academic_year_id', 'class_name', 'capacity', 'created_at', 'updated_at', 'synced_at'],
+            'required' => ['id', 'branch_id', 'academic_year_id', 'class_name', 'capacity', 'created_at', 'updated_at'],
+        ],
         'students' => [
-            'columns' => ['id', 'branch_id', 'nisn', 'name', 'current_class', 'created_at', 'updated_at', 'synced_at'],
+            'columns' => ['id', 'branch_id', 'nisn', 'name', 'current_class', 'admission_academic_year_id', 'gender', 'birth_place', 'birth_date', 'guardian_name', 'guardian_phone', 'address', 'previous_school', 'created_at', 'updated_at', 'synced_at'],
             'required' => ['id', 'branch_id', 'nisn', 'name', 'current_class', 'created_at', 'updated_at'],
         ],
         'spp_billings' => [
@@ -69,6 +79,8 @@ class SyncIngestController
         'annual_incentive_assignments' => AnnualIncentiveAssignment::class,
         'branch_positions' => BranchPosition::class,
         'employee_position_assignments' => EmployeePositionAssignment::class,
+        'school_classes' => SchoolClass::class,
+        'class_capacities' => ClassCapacity::class,
         'students' => Student::class,
         'spp_billings' => SppBilling::class,
         'spp_payments' => SppPayment::class,
@@ -118,6 +130,24 @@ class SyncIngestController
             $rules['records.*.is_active'][] = 'boolean';
             foreach (['monthly_salary_addition', 'monthly_allowance', 'monthly_incentive'] as $amount) {
                 $rules["records.*.{$amount}"][] = 'numeric|min:0|max:999999999999.99';
+            }
+            if ($entity === 'school_classes') {
+                $rules['records.*.name'][] = 'required|string|max:50';
+            }
+            if ($entity === 'class_capacities') {
+                $rules['records.*.academic_year_id'][] = 'required|uuid';
+                $rules['records.*.class_name'][] = 'required|string|max:50';
+                $rules['records.*.capacity'][] = 'required|integer|min:1|max:500';
+            }
+            if ($entity === 'students') {
+                $rules['records.*.admission_academic_year_id'][] = 'nullable|uuid';
+                $rules['records.*.gender'][] = ['nullable', 'in:LAKI_LAKI,PEREMPUAN'];
+                $rules['records.*.birth_place'][] = 'nullable|string|max:100';
+                $rules['records.*.birth_date'][] = 'nullable|date';
+                $rules['records.*.guardian_name'][] = 'nullable|string|max:255';
+                $rules['records.*.guardian_phone'][] = 'nullable|string|max:30';
+                $rules['records.*.address'][] = 'nullable|string|max:2000';
+                $rules['records.*.previous_school'][] = 'nullable|string|max:255';
             }
         }
         if ($entity === 'employee_position_assignments') {
@@ -216,6 +246,18 @@ class SyncIngestController
         }
 
         $validated = Validator::make($request->all(), $rules)->validate();
+        if ($entity === 'school_classes') {
+            foreach ($validated['records'] as &$record) {
+                $existingClassId = DB::table('school_classes')
+                    ->where('branch_id', $record['branch_id'])
+                    ->where('name', $record['name'])
+                    ->value('id');
+                if ($existingClassId !== null) {
+                    $record['id'] = $existingClassId;
+                }
+            }
+            unset($record);
+        }
         $employeeBaseSalaries = $entity === 'salaries'
             ? DB::table('employees')
                 ->whereIn('id', collect($validated['records'])->pluck('employee_id')->unique())

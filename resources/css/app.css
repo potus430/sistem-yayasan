@@ -10,3 +10,74 @@
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
 }
+
+@layer base {
+    :root {
+        color-scheme: light;
+        font-synthesis: none;
+        text-rendering: optimizeLegibility;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+        background: #f4f6fb;
+        color: #172033;
+    }
+
+    ::selection {
+        background: #c7d2fe;
+        color: #1e1b4b;
+    }
+
+    :focus-visible {
+        outline: 3px solid rgb(99 102 241 / 45%);
+        outline-offset: 2px;
+    }
+
+    input,
+    select,
+    textarea {
+        accent-color: #4f46e5;
+    }
+
+    input::placeholder,
+    textarea::placeholder {
+        color: #94a3b8;
+    }
+
+    button,
+    a,
+    input,
+    select,
+    textarea {
+        transition-duration: 160ms;
+    }
+
+    button:disabled {
+        cursor: not-allowed;
+    }
+
+    table {
+        font-variant-numeric: tabular-nums;
+    }
+
+    ::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: #f1f3f8;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        border: 2px solid #f1f3f8;
+        border-radius: 999px;
+        background: #cbd2df;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: #aab4c5;
+    }
+}

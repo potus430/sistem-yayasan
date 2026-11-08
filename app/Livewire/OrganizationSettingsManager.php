@@ -18,7 +18,15 @@ class OrganizationSettingsManager extends Component
 
     public string $foundationAddress = '';
 
+    public string $loginPanelBadge = '';
+
+    public string $loginPanelHeadline = '';
+
+    public string $loginPanelDescription = '';
+
     public $logo = null;
+
+    public $loginPanelImage = null;
 
     public function mount(): void
     {
@@ -28,6 +36,9 @@ class OrganizationSettingsManager extends Component
         $this->applicationName = $settings->application_name;
         $this->foundationName = $settings->foundation_name;
         $this->foundationAddress = (string) $settings->foundation_address;
+        $this->loginPanelBadge = (string) $settings->login_panel_badge;
+        $this->loginPanelHeadline = (string) $settings->login_panel_headline;
+        $this->loginPanelDescription = (string) $settings->login_panel_description;
     }
 
     public function save(): void
@@ -38,7 +49,11 @@ class OrganizationSettingsManager extends Component
             'applicationName' => ['required', 'string', 'max:120'],
             'foundationName' => ['required', 'string', 'max:180'],
             'foundationAddress' => ['nullable', 'string', 'max:2000'],
+            'loginPanelBadge' => ['required', 'string', 'max:100'],
+            'loginPanelHeadline' => ['required', 'string', 'max:180'],
+            'loginPanelDescription' => ['required', 'string', 'max:1000'],
             'logo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'loginPanelImage' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
         ]);
 
         $settings = OrganizationSetting::current();
@@ -56,6 +71,20 @@ class OrganizationSettingsManager extends Component
                 throw new \RuntimeException('Logo yayasan gagal disimpan ke penyimpanan publik.');
             }
         }
+        $previousPanelImagePath = $settings->login_panel_image_path;
+        $newPanelImagePath = null;
+        if ($validated['loginPanelImage'] !== null) {
+            $extension = $validated['loginPanelImage']->guessExtension();
+            abort_unless($extension, 422, 'Format gambar halaman login tidak dapat ditentukan.');
+            $newPanelImagePath = $validated['loginPanelImage']->storePubliclyAs(
+                'identity/login',
+                Str::uuid().'.'.$extension,
+                'public'
+            );
+            if (! $newPanelImagePath) {
+                throw new \RuntimeException('Gambar panel login gagal disimpan.');
+            }
+        }
 
         $settings->update([
             'application_name' => trim($validated['applicationName']),
@@ -64,14 +93,22 @@ class OrganizationSettingsManager extends Component
                 ? trim($validated['foundationAddress'])
                 : null,
             'logo_path' => $newLogoPath ?? $previousLogoPath,
+            'login_panel_badge' => trim($validated['loginPanelBadge']),
+            'login_panel_headline' => trim($validated['loginPanelHeadline']),
+            'login_panel_description' => trim($validated['loginPanelDescription']),
+            'login_panel_image_path' => $newPanelImagePath ?? $previousPanelImagePath,
         ]);
 
         if ($newLogoPath !== null && $previousLogoPath !== null && ! Storage::disk('public')->delete($previousLogoPath)) {
             throw new \RuntimeException('Logo lama gagal dihapus dari penyimpanan publik.');
         }
+        if ($newPanelImagePath !== null && $previousPanelImagePath !== null
+            && ! Storage::disk('public')->delete($previousPanelImagePath)) {
+            throw new \RuntimeException('Gambar panel login lama gagal dihapus.');
+        }
 
-        $this->reset('logo');
-        session()->flash('success', 'Identitas aplikasi dan yayasan berhasil diperbarui.');
+        $this->reset(['logo', 'loginPanelImage']);
+        session()->flash('success', 'Identitas aplikasi, yayasan, dan panel login berhasil diperbarui.');
     }
 
     public function removeLogo(): void
@@ -87,6 +124,21 @@ class OrganizationSettingsManager extends Component
 
         $this->reset('logo');
         session()->flash('success', 'Logo yayasan berhasil dihapus.');
+    }
+
+    public function removeLoginPanelImage(): void
+    {
+        abort_unless(auth()->user()->role === 'admin_pusat', 403);
+
+        $settings = OrganizationSetting::current();
+        $imagePath = $settings->login_panel_image_path;
+        $settings->update(['login_panel_image_path' => null]);
+        if ($imagePath !== null && ! Storage::disk('public')->delete($imagePath)) {
+            throw new \RuntimeException('Gambar panel login gagal dihapus.');
+        }
+
+        $this->reset('loginPanelImage');
+        session()->flash('success', 'Gambar panel login berhasil dihapus.');
     }
 
     public function render()

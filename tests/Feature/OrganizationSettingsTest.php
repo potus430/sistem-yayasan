@@ -46,14 +46,20 @@ class OrganizationSettingsTest extends TestCase
             ->set('applicationName', 'Sistem Yayasan Modern')
             ->set('foundationName', 'Yayasan Pendidikan Cendekia')
             ->set('foundationAddress', 'Jl. Merdeka No. 25, Kota Pendidikan')
+            ->set('loginPanelBadge', 'Portal pendidikan')
+            ->set('loginPanelHeadline', 'Belajar dan tumbuh bersama')
+            ->set('loginPanelDescription', 'Kelola layanan pendidikan di setiap cabang.')
             ->call('save')
             ->assertHasNoErrors()
-            ->assertSee('Identitas aplikasi dan yayasan berhasil diperbarui.');
+            ->assertSee('Identitas aplikasi, yayasan, dan panel login berhasil diperbarui.');
 
         $settings = OrganizationSetting::current();
         $this->assertSame('Sistem Yayasan Modern', $settings->application_name);
         $this->assertSame('Yayasan Pendidikan Cendekia', $settings->foundation_name);
         $this->assertSame('Jl. Merdeka No. 25, Kota Pendidikan', $settings->foundation_address);
+        $this->assertSame('Portal pendidikan', $settings->login_panel_badge);
+        $this->assertSame('Belajar dan tumbuh bersama', $settings->login_panel_headline);
+        $this->assertSame('Kelola layanan pendidikan di setiap cabang.', $settings->login_panel_description);
 
         $this->actingAs($branchUser)
             ->get(route('dashboard'))
@@ -67,6 +73,12 @@ class OrganizationSettingsTest extends TestCase
             ->assertOk()
             ->assertSee('<title>Sistem Yayasan Modern · Yayasan Pendidikan Cendekia</title>', false)
             ->assertDontSee('<title>Dashboard ·', false);
+        auth()->logout();
+        $this->get(route('login'))
+            ->assertOk()
+            ->assertSee('Belajar dan tumbuh bersama')
+            ->assertSee('Portal pendidikan')
+            ->assertSee('Kelola layanan pendidikan di setiap cabang.');
     }
 
     public function test_non_central_user_cannot_manage_organization_identity(): void
@@ -134,5 +146,36 @@ class OrganizationSettingsTest extends TestCase
 
         $this->assertNull(OrganizationSetting::current()->logo_path);
         Storage::disk('public')->assertMissing($replacementPath);
+    }
+
+    public function test_central_admin_can_upload_and_remove_login_panel_image(): void
+    {
+        Storage::fake('public');
+        $admin = User::query()->create([
+            'name' => 'Panel Admin',
+            'email' => Str::uuid().'@example.test',
+            'password' => 'test-password',
+            'branch_id' => null,
+            'role' => 'admin_pusat',
+            'is_active' => true,
+        ]);
+
+        $component = Livewire::actingAs($admin)
+            ->test(OrganizationSettingsManager::class)
+            ->set('loginPanelImage', TemporaryUploadedFile::fake()->image('panel.webp'))
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $imagePath = OrganizationSetting::current()->login_panel_image_path;
+        $this->assertNotNull($imagePath);
+        Storage::disk('public')->assertExists($imagePath);
+
+        auth()->logout();
+        $this->get(route('login'))->assertOk()->assertSee(Storage::disk('public')->url($imagePath));
+
+        $this->actingAs($admin);
+        $component->call('removeLoginPanelImage')->assertHasNoErrors();
+        $this->assertNull(OrganizationSetting::current()->login_panel_image_path);
+        Storage::disk('public')->assertMissing($imagePath);
     }
 }

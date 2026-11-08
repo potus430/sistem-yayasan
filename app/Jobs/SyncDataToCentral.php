@@ -4,8 +4,10 @@ namespace App\Jobs;
 
 use App\Models\AnnualIncentiveAssignment;
 use App\Models\Attendance;
+use App\Models\SchoolClass;
 use App\Models\BranchIncentive;
 use App\Models\BranchPosition;
+use App\Models\ClassCapacity;
 use App\Models\EmployeePositionAssignment;
 use App\Models\Salary;
 use App\Models\SppBilling;
@@ -46,6 +48,8 @@ class SyncDataToCentral implements ShouldQueue
             'annual_incentive_assignments' => AnnualIncentiveAssignment::class,
             'branch_positions' => BranchPosition::class,
             'employee_position_assignments' => EmployeePositionAssignment::class,
+            'school_classes' => SchoolClass::class,
+            'class_capacities' => ClassCapacity::class,
             'students' => Student::class,
             'spp_billings' => SppBilling::class,
             'spp_payments' => SppPayment::class,

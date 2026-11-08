@@ -11,20 +11,20 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @livewireStyles
 </head>
-<body class="min-h-screen bg-[#f5f6fb] text-slate-800 antialiased">
+<body class="min-h-screen bg-[#f4f6fb] text-slate-800 antialiased">
     <div class="min-h-screen lg:flex">
-        <aside class="bg-slate-950 text-white lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
-            <div class="flex items-center gap-3 px-5 py-5">
+        <aside class="bg-slate-950 text-white shadow-2xl shadow-slate-950/10 lg:fixed lg:inset-y-0 lg:flex lg:w-72 lg:flex-col [background:linear-gradient(180deg,#111827_0%,#0b1220_100%)]">
+            <div class="flex items-center gap-3 px-5 py-6">
                 @if($organizationSettings->logo_path)
-                    <img src="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($organizationSettings->logo_path) }}" alt="Logo {{ $organizationSettings->foundation_name }}" class="h-11 w-11 rounded-2xl bg-white object-contain p-1 shadow-lg">
+                    <img src="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($organizationSettings->logo_path) }}" alt="Logo {{ $organizationSettings->foundation_name }}" class="h-12 w-12 rounded-2xl bg-white object-contain p-1.5 shadow-lg shadow-indigo-950/30">
                 @else
-                    <span class="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-400 to-violet-600 text-lg font-black shadow-lg shadow-indigo-950/40">Y</span>
+                    <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-400 to-violet-600 text-lg font-black shadow-lg shadow-indigo-950/40 ring-1 ring-white/20">Y</span>
                 @endif
                 <div class="min-w-0"><a href="{{ route(auth()->user()->role === 'staff_pusat' ? 'profile' : 'dashboard') }}" class="block truncate font-bold tracking-tight">{{ $applicationBrand }}</a><span class="block truncate text-xs text-slate-400">{{ $organizationSettings->foundation_name }}</span></div>
             </div>
             <div class="mx-4 border-t border-white/10"></div>
-            <nav class="flex gap-1 overflow-x-auto px-3 py-4 text-sm lg:flex-1 lg:flex-col lg:overflow-y-auto">
-                <p class="hidden px-3 pb-2 pt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 lg:block">Menu utama</p>
+            <nav class="flex gap-1 overflow-x-auto px-3 py-4 text-sm lg:flex-1 lg:flex-col lg:overflow-y-auto lg:px-4">
+                <p class="hidden px-3 pb-2 pt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 lg:block">Ruang kerja</p>
                 @if(auth()->user()->role !== 'staff_pusat')
                     <a href="{{ route('dashboard') }}" class="flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 font-medium transition {{ request()->routeIs('dashboard') ? 'bg-indigo-500/20 text-indigo-200 ring-1 ring-inset ring-indigo-400/20' : 'text-slate-300 hover:bg-white/5 hover:text-white' }}">
                         <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/></svg>Dashboard
@@ -62,6 +62,11 @@
                     @if(in_array(auth()->user()->role, ['admin_pusat', 'admin_cabang']))
                         <a href="{{ route('students') }}" class="flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 font-medium transition {{ request()->routeIs('students') ? 'bg-indigo-500/20 text-indigo-200 ring-1 ring-inset ring-indigo-400/20' : 'text-slate-300 hover:bg-white/5 hover:text-white' }}">
                             <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 10v6M2 10l10-5 10 5-10 5-10-5Z"/><path d="M6 12v5c3.3 2.7 8.7 2.7 12 0v-5"/></svg>Data siswa
+                        </a>
+                    @endif
+                    @if(auth()->user()->role === 'admin_cabang')
+                        <a href="{{ route('admissions') }}" class="flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 font-medium transition {{ request()->routeIs('admissions') ? 'bg-indigo-500/20 text-indigo-200 ring-1 ring-inset ring-indigo-400/20' : 'text-slate-300 hover:bg-white/5 hover:text-white' }}">
+                            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v18M3 12h18"/><circle cx="12" cy="12" r="10"/></svg>Pendaftaran siswa
                         </a>
                     @endif
                     @if(in_array(auth()->user()->role, ['admin_pusat', 'admin_cabang']))
@@ -117,17 +122,21 @@
                 </div>
             </div>
         </aside>
-        <div class="min-w-0 flex-1 lg:ml-64">
-            <header class="sticky top-0 z-20 border-b border-slate-200/80 bg-white/90 backdrop-blur">
-                <div class="mx-auto flex max-w-[1500px] items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
-                    <div><p class="text-xs font-medium text-slate-400">{{ $applicationBrand }} · {{ $organizationSettings->foundation_name }}</p><p class="font-semibold text-slate-800">{{ $title ?? 'Dashboard' }}</p></div>
+        <div class="min-w-0 flex-1 lg:ml-72">
+            <header class="sticky top-0 z-20 border-b border-slate-200/70 bg-white/85 shadow-sm shadow-slate-900/[0.02] backdrop-blur-xl">
+                <div class="mx-auto flex max-w-[1600px] items-center justify-between px-4 py-3.5 sm:px-6 lg:px-9">
+                    <div class="flex min-w-0 items-center gap-3">
+                        <span class="hidden h-9 w-1 rounded-full bg-gradient-to-b from-indigo-500 to-violet-500 sm:block"></span>
+                        <div class="min-w-0"><p class="truncate text-[11px] font-semibold tracking-wide text-slate-400">{{ $applicationBrand }} <span class="px-1 text-slate-300">/</span> {{ $organizationSettings->foundation_name }}</p><p class="truncate text-base font-bold tracking-tight text-slate-900">{{ $title ?? 'Dashboard' }}</p></div>
+                    </div>
                     <div class="flex items-center gap-3">
-                        <span class="hidden rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-semibold capitalize text-indigo-700 sm:inline-flex">{{ str_replace('_', ' ', auth()->user()->role) }}</span>
-                        <form method="POST" action="{{ route('logout') }}" class="lg:hidden">@csrf<button class="rounded-lg px-3 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50">Keluar</button></form>
+                        <span class="hidden items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50/80 px-3 py-1.5 text-xs font-semibold capitalize text-indigo-800 sm:inline-flex"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>{{ str_replace('_', ' ', auth()->user()->role) }}</span>
+                        <span class="hidden text-xs font-medium text-slate-400 xl:inline">{{ now()->format('d M Y') }}</span>
+                        <form method="POST" action="{{ route('logout') }}" class="lg:hidden">@csrf<button class="rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100">Keluar</button></form>
                     </div>
                 </div>
             </header>
-            <main class="mx-auto max-w-[1500px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+            <main class="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-9 lg:py-9">
         @yield('content')
         {{ $slot ?? '' }}
             </main>

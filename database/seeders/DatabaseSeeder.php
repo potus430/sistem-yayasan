@@ -13,6 +13,7 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $this->call(SampleDataSeeder::class);
+        $this->call(SampleStudentProfileSeeder::class);
 
         $adminEmail = env('SEED_ADMIN_EMAIL');
         $adminPassword = env('SEED_ADMIN_PASSWORD');

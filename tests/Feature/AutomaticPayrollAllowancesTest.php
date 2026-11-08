@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Livewire\IncentiveSettings;
 use App\Livewire\PayrollManager;
 use App\Models\AcademicYear;
+use App\Models\Attendance;
 use App\Models\Branch;
 use App\Models\BranchIncentive;
 use App\Models\Employee;
@@ -21,6 +22,68 @@ use Tests\TestCase;
 class AutomaticPayrollAllowancesTest extends TestCase
 {
     use DatabaseTransactions;
+
+    public function test_payroll_deducts_permission_and_absence_but_not_sick_leave(): void
+    {
+        $branch = Branch::query()->create([
+            'name' => 'Payroll Attendance Test '.Str::uuid(),
+            'level' => 'SMA',
+            'address' => 'Test address',
+        ]);
+        $finance = User::query()->create([
+            'name' => 'Central Finance Test',
+            'email' => Str::uuid().'@example.test',
+            'password' => 'test-password',
+            'branch_id' => null,
+            'role' => 'keuangan_pusat',
+            'is_active' => true,
+        ]);
+        $employee = Employee::query()->create([
+            'branch_id' => $branch->id,
+            'nip' => Str::random(15),
+            'name' => 'Payroll Employee',
+            'type' => 'STAFF',
+            'base_salary' => 310000,
+            'status' => 'TETAP',
+        ]);
+        $academicYear = AcademicYear::query()->create([
+            'name' => '2098/2099-'.Str::random(4),
+            'starts_on' => '2026-07-01',
+            'ends_on' => '2027-06-30',
+            'is_active' => false,
+        ]);
+
+        foreach ([
+            ['2026-10-05', 'IZIN'],
+            ['2026-10-12', 'ALFA'],
+            ['2026-10-19', 'SAKIT'],
+        ] as [$date, $status]) {
+            Attendance::query()->create([
+                'branch_id' => $branch->id,
+                'employee_id' => $employee->id,
+                'date' => $date,
+                'status' => $status,
+            ]);
+        }
+
+        Livewire::actingAs($finance)
+            ->test(PayrollManager::class)
+            ->set('branchId', $branch->id)
+            ->set('employeeId', $employee->id)
+            ->set('period', '2026-10')
+            ->set('academicYearId', $academicYear->id)
+            ->call('savePayroll')
+            ->assertHasNoErrors();
+
+        $salary = Salary::query()
+            ->where('branch_id', $branch->id)
+            ->where('employee_id', $employee->id)
+            ->where('period', '2026-10')
+            ->firstOrFail();
+
+        $this->assertSame('20000.00', $salary->deductions);
+        $this->assertSame('290000.00', $salary->net_salary);
+    }
 
     public function test_payroll_preview_and_salary_include_transport_and_recorded_substitutions(): void
     {

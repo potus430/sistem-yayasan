@@ -6,6 +6,7 @@ use App\Http\Controllers\ReportDownloadController;
 use App\Livewire\AccountProfile;
 use App\Livewire\AttendanceManager;
 use App\Livewire\AuditLogViewer;
+use App\Livewire\AdmissionsManager;
 use App\Livewire\Auth\Login;
 use App\Livewire\BranchDirectory;
 use App\Livewire\Dashboard;
@@ -19,6 +20,8 @@ use App\Livewire\ReportsDashboard;
 use App\Livewire\SchoolStructureManager;
 use App\Livewire\SppDashboard;
 use App\Livewire\StudentDirectory;
+use App\Livewire\StudentDocumentManager;
+use App\Http\Controllers\StudentDocumentDownloadController;
 use App\Livewire\UserDirectory;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
@@ -48,6 +51,10 @@ Route::middleware(['auth', 'role:admin_pusat,admin_cabang'])->group(function ():
 });
 
 Route::middleware(['auth', 'role:admin_pusat,admin_cabang'])->get('/students', StudentDirectory::class)->name('students');
+Route::middleware(['auth', 'role:admin_cabang'])->get('/admissions', AdmissionsManager::class)->name('admissions');
+Route::middleware(['auth', 'role:admin_cabang'])->get('/students/{student}/documents', StudentDocumentManager::class)->name('student-documents');
+Route::middleware(['auth', 'role:admin_pusat,admin_cabang'])->get('/student-documents/{document}/download', StudentDocumentDownloadController::class)->name('student-documents.download');
+Route::middleware(['auth', 'role:admin_pusat,admin_cabang'])->get('/student-documents/{document}/preview', [StudentDocumentDownloadController::class, 'preview'])->name('student-documents.preview');
 
 Route::middleware(['auth', 'role:admin_pusat'])->group(function (): void {
     Route::get('/activity-logs', AuditLogViewer::class)->name('activity-logs');

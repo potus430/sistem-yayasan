@@ -9,6 +9,8 @@ Route::post('/sync/{entity}', SyncIngestController::class)
         'annual_incentive_assignments',
         'branch_positions',
         'employee_position_assignments',
+        'school_classes',
+        'class_capacities',
         'students',
         'salaries',
         'attendances',

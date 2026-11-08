@@ -64,8 +64,17 @@
                         <tr wire:key="student-{{ $student->id }}" class="transition hover:bg-sky-50/40">
                             <td class="whitespace-nowrap px-5 py-4">
                                 <div class="flex items-center gap-3">
-                                    <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-100 text-sm font-bold text-sky-700">{{ strtoupper(substr($student->name, 0, 1)) }}</span>
-                                    <div><p class="font-semibold text-slate-900">{{ $student->name }}</p><p class="text-xs text-slate-500">Terdaftar {{ $student->created_at?->format('d M Y') ?? '—' }}</p></div>
+                                    <button type="button" wire:click="showDetails('{{ $student->id }}')" aria-label="Lihat detail {{ $student->name }}" class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-sky-100 text-sm font-bold text-sky-700">
+                                        @if($photos->has($student->id))
+                                            <img src="{{ route('student-documents.preview', $photos[$student->id]) }}" alt="Pas foto {{ $student->name }}" class="h-full w-full object-cover">
+                                        @else
+                                            {{ strtoupper(substr($student->name, 0, 1)) }}
+                                        @endif
+                                    </button>
+                                    <div>
+                                        <button type="button" wire:click="showDetails('{{ $student->id }}')" class="text-left font-semibold text-slate-900 hover:text-sky-700">{{ $student->name }}</button>
+                                        <p class="text-xs text-slate-500">Terdaftar {{ $student->created_at?->format('d M Y') ?? '—' }}</p>
+                                    </div>
                                 </div>
                             </td>
                             <td class="whitespace-nowrap px-5 py-4 font-mono text-sm text-slate-600">{{ $student->nisn }}</td>
@@ -74,10 +83,11 @@
                             <td class="whitespace-nowrap px-5 py-4 text-right"><span class="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700">{{ $student->branch?->level ?? '—' }}</span></td>
                             <td class="whitespace-nowrap px-5 py-4 text-right">
                                 @if(auth()->user()->role === 'admin_cabang')
+                                <a href="{{ route('student-documents', $student) }}" class="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50">Dokumen</a>
                                 <button type="button" wire:click="editStudent('{{ $student->id }}')" class="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-sky-700 hover:bg-sky-50">Edit</button>
                                 <button type="button" wire:click="deleteStudent('{{ $student->id }}')" wire:confirm="Hapus data {{ $student->name }}? Siswa dengan riwayat SPP tidak dapat dihapus." class="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50">Hapus</button>
                                 @else
-                                <span class="text-xs text-slate-400">Lihat saja</span>
+                                <button type="button" wire:click="showDetails('{{ $student->id }}')" class="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50">Detail</button>
                                 @endif
                             </td>
                         </tr>
@@ -94,6 +104,81 @@
             <div class="border-t border-slate-100 px-5 py-4">{{ $students->links() }}</div>
         @endif
     </article>
+
+        @if($selectedStudent)
+            @php($studentPhoto = $selectedStudent->documents->first(fn ($document) => $document->type === 'PAS_PHOTO' && in_array($document->mime_type, ['image/jpeg', 'image/png', 'image/webp'], true)))
+            @php($studentGender = strtoupper(str_replace([' ', '-'], '_', (string) $selectedStudent->gender)))
+            @php($isFemaleStudent = in_array($studentGender, ['P', 'PEREMPUAN', 'WANITA', 'FEMALE'], true))
+            @php($defaultStudentPhoto = $isFemaleStudent ? 'pasphoto/icon-wanita.png' : 'pasphoto/icon-laki.png')
+            <div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="student-detail-title" wire:keydown.escape.window="closeDetails">
+                <section class="my-auto max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-3xl bg-white shadow-2xl">
+                    <header class="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-slate-100 bg-white/95 p-5 pr-14 backdrop-blur sm:p-7 sm:pr-16">
+                        <div class="min-w-0">
+                            <p class="text-xs font-bold uppercase tracking-[0.16em] text-sky-600">Profil peserta didik</p>
+                            <h2 id="student-detail-title" class="mt-1 truncate text-xl font-bold text-slate-900 sm:text-2xl">{{ $selectedStudent->name }}</h2>
+                            <p class="mt-1 text-sm text-slate-500">{{ $selectedStudent->nisn ?: 'NISN belum diisi' }}</p>
+                        </div>
+                        <div class="h-16 w-16 shrink-0 overflow-hidden rounded-full bg-slate-100 ring-2 ring-white shadow-md sm:h-20 sm:w-20">
+                            @if($studentPhoto)
+                                <img src="{{ route('student-documents.preview', $studentPhoto) }}" alt="Pas foto {{ $selectedStudent->name }}" class="h-full w-full object-cover">
+                            @else
+                                <img src="{{ asset($defaultStudentPhoto) }}" alt="Foto profil default {{ $isFemaleStudent ? 'perempuan' : 'laki-laki' }}" class="h-full w-full object-cover">
+                            @endif
+                        </div>
+                        <button type="button" wire:click="closeDetails" aria-label="Tutup detail siswa" class="absolute right-3 top-3 rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 sm:right-4 sm:top-4">✕</button>
+                    </header>
+
+                    <div class="space-y-7 p-5 sm:p-7">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-900">Data siswa dan sekolah</h3>
+                            <dl class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs font-medium text-slate-500">Jenis kelamin</dt><dd class="mt-1 text-sm font-semibold text-slate-800">{{ ['L' => 'Laki-laki', 'P' => 'Perempuan'][$selectedStudent->gender] ?? ($selectedStudent->gender ?: '—') }}</dd></div>
+                                <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs font-medium text-slate-500">Tempat, tanggal lahir</dt><dd class="mt-1 text-sm font-semibold text-slate-800">{{ $selectedStudent->birth_place ?: '—' }}{{ $selectedStudent->birth_date ? ', '.$selectedStudent->birth_date->format('d M Y') : '' }}</dd></div>
+                                <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs font-medium text-slate-500">NISN</dt><dd class="mt-1 text-sm font-semibold text-slate-800">{{ $selectedStudent->nisn ?: '—' }}</dd></div>
+                                <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs font-medium text-slate-500">Cabang</dt><dd class="mt-1 text-sm font-semibold text-slate-800">{{ $selectedStudent->branch?->name ?? '—' }}{{ $selectedStudent->branch?->level ? ' · '.$selectedStudent->branch->level : '' }}</dd></div>
+                                <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs font-medium text-slate-500">Kelas</dt><dd class="mt-1 text-sm font-semibold text-slate-800">{{ $selectedStudent->current_class ?: '—' }}</dd></div>
+                                <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs font-medium text-slate-500">Tahun ajaran masuk</dt><dd class="mt-1 text-sm font-semibold text-slate-800">{{ $selectedStudent->admissionAcademicYear?->name ?? '—' }}</dd></div>
+                                <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs font-medium text-slate-500">Jenis penerimaan</dt><dd class="mt-1 text-sm font-semibold text-slate-800">{{ ['NEW' => 'Siswa baru', 'TRANSFER' => 'Siswa pindahan'][$selectedStudent->enrollment_type] ?? ($selectedStudent->enrollment_type ?: '—') }}</dd></div>
+                                <div class="rounded-xl bg-slate-50 p-3 sm:col-span-2"><dt class="text-xs font-medium text-slate-500">Sekolah asal</dt><dd class="mt-1 text-sm font-semibold text-slate-800">{{ $selectedStudent->previous_school ?: '—' }}</dd></div>
+                                <div class="rounded-xl bg-slate-50 p-3 sm:col-span-2 lg:col-span-3"><dt class="text-xs font-medium text-slate-500">Alamat lengkap</dt><dd class="mt-1 whitespace-pre-line text-sm font-semibold text-slate-800">{{ $selectedStudent->address ?: '—' }}</dd></div>
+                            </dl>
+                        </div>
+
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-900">Orang tua / wali</h3>
+                            <dl class="mt-3 grid gap-3 sm:grid-cols-2">
+                                <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs font-medium text-slate-500">Nama orang tua / wali</dt><dd class="mt-1 text-sm font-semibold text-slate-800">{{ $selectedStudent->guardian_name ?: '—' }}</dd></div>
+                                <div class="rounded-xl bg-slate-50 p-3"><dt class="text-xs font-medium text-slate-500">Nomor HP</dt><dd class="mt-1 text-sm font-semibold text-slate-800">{{ $selectedStudent->guardian_phone ?: '—' }}</dd></div>
+                            </dl>
+                        </div>
+
+                        <div>
+                            <div class="flex items-center justify-between gap-3">
+                                <h3 class="text-sm font-bold text-slate-900">Dokumen siswa</h3>
+                                @if(auth()->user()->role === 'admin_cabang')
+                                    <a href="{{ route('student-documents', $selectedStudent) }}" class="text-xs font-semibold text-indigo-700 hover:underline">Kelola dokumen</a>
+                                @endif
+                            </div>
+                            @if($selectedStudent->documents->isEmpty())
+                                <p class="mt-3 rounded-xl border border-dashed border-slate-200 px-4 py-5 text-center text-sm text-slate-500">Belum ada dokumen yang diunggah.</p>
+                            @else
+                                <ul class="mt-3 divide-y divide-slate-100 rounded-xl border border-slate-100">
+                                    @foreach($selectedStudent->documents->sortByDesc('created_at') as $document)
+                                        <li wire:key="student-document-{{ $document->id }}" class="flex items-center justify-between gap-3 px-4 py-3">
+                                            <div class="min-w-0"><p class="truncate text-sm font-semibold text-slate-800">{{ \App\Models\StudentDocument::TYPES[$document->type] ?? 'Dokumen siswa' }}</p><p class="truncate text-xs text-slate-500">{{ $document->original_name }}</p></div>
+                                            <a href="{{ route('student-documents.download', $document) }}" class="shrink-0 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50">Unduh</a>
+                                        </li>
+                                    @endforeach
+                                </ul>
+                            @endif
+                        </div>
+                    </div>
+                    <footer class="flex justify-end border-t border-slate-100 px-5 py-4 sm:px-7">
+                        <button type="button" wire:click="closeDetails" class="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-700">Tutup</button>
+                    </footer>
+                </section>
+            </div>
+        @endif
 
     @if($showForm && auth()->user()->role === 'admin_cabang')
         <div class="fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-slate-950/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="student-form-title">

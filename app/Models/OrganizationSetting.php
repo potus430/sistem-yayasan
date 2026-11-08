@@ -16,6 +16,10 @@ class OrganizationSetting extends Model
         'foundation_name',
         'foundation_address',
         'logo_path',
+        'login_panel_badge',
+        'login_panel_headline',
+        'login_panel_description',
+        'login_panel_image_path',
     ];
 
     public static function current(): self
